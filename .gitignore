@@ -1,0 +1,6 @@
+*.txt
+*.png
+*.exe
+*.dll
+programas/
+git rm --cached *.msi
