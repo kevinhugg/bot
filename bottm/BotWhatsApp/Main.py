@@ -3,8 +3,8 @@ from MainClass import *
 import sys
 
 # DEFINIÇÃO DO CANAL E VARIÁVEIS DE CONTROLE
-canal = "terra" #terra
-spins = 300
+canal = "teste" #colocar o terra depois
+spins = 1 #mudar para 300 depois
 spins = 1 if canal != "teste" else spins
 n = 0
 sleep_geral = 2

@@ -88,8 +88,10 @@ class Tools:
                 , dtype=str
             )
         except Exception as e:
-            Tools.log(msg=f"Erro ao ler discagem: {e}", canal=Tools.canal)
-            sys.exit()
+            Tools.log(msg=f"Arquivo de discagem não encontrado ou com erro, tratando como vazio: {e}", canal=Tools.canal)
+            df_discagem = pd.DataFrame(columns=["Telefone"])
+            #Tools.log(msg=f"Erro ao ler discagem: {e}", canal=Tools.canal) #####ORIGINAL#####
+            #sys.exit()
 
         #################################################################
         ## FORMATAÇÃO DOS TELEFONES (SOMENTE DÍGITOS E ADIÇÃO DO 55) ##
@@ -284,7 +286,22 @@ class Tools:
         """
 
         # DIRETORIOS
-        dir_img_db = rf"\\100.96.1.3\transfer\tm\imgs\Campanha{random.randint(1, 13)}"
+        dir_base_campanhas = dir_tm_imgs
+        dir_img_db = None
+
+        try:
+            campanhas = [d for d in os.listdir(dir_base_campanhas) if os.path.isdir(os.path.join(dir_base_campanhas, d)) and d.startswith('Campanha')]
+            if campanhas:
+                campanha_escolhida = random.choice(campanhas)
+                dir_img_db = os.path.join(dir_base_campanhas, campanha_escolhida)
+                Tools.log(msg=f"Diretório de campanha selecionado: {dir_img_db}", canal=Tools.canal)
+            else:
+                Tools.log(msg=f"Nenhum diretório de campanha encontrado em '{dir_base_campanhas}'", canal=Tools.canal)
+        except Exception as e:
+            Tools.log(msg=f'Erro ao selecionar diretório de campanha: {e}', canal=Tools.canal)
+            return
+
+        #dir_img_db = rf"\\100.96.1.3\transfer\tm\imgs\Campanha{random.randint(1, 13)}"
         raiz_dir = dirs_ref["dir_img_ref"]
 
         limit = 10
@@ -374,19 +391,42 @@ class Tools:
     def tm_mensagem():
         raiz_dir = dirs_ref["dir_tm_msg"]
 
-        mensagem = ""
-        num = random.randint(1, 7)
+        try:
+            #Lista todos os arquivos .txt no diretório de mensagens
+            arquivos_msg = [f for f in os.listdir(raiz_dir) if f.endswith('.txt')]
 
-        for file in os.listdir(raiz_dir):
+            if not arquivos_msg:
+                Tools.log(msg=f"Nenhum arquivo de mensagem (.txt) encontrado em '{raiz_dir}'", canal=Tools.canal)
+                return ""
 
-            if file == f"Frase{num}.txt":
-                file_path = os.path.join(raiz_dir, file)
+            #escolhe um arquivo de mensagem aleatoriamente
+            arquivo_escolhido = random.choice(arquivos_msg)
+            caminho_arquivo = os.path.join(raiz_dir, arquivo_escolhido)
 
-                with open(file_path, "r", encoding="utf-8") as f:
-                    mensagem = f.read().strip()
-                break
+            #Lê o conteúdo do arquivo escolhido
+            with open(caminho_arquivo, "r", encoding="utf-8") as f:
+                mensagem = f.read().strip()
 
-        return mensagem
+            Tools.log(msg=f"Mensagem selecionada do arquivo: {arquivo_escolhido}", canal=Tools.canal)
+            return mensagem
+        except Exception as e:
+            Tools.log(msg=f"Erro ao selecionar mensagem aleatória: {e}", canal=Tools.canal)
+            return ""
+
+######Voltar depois caso não dê certo
+        #mensagem = ""
+        #num = random.randint(1, 7)
+
+        #for file in os.listdir(raiz_dir):
+
+            #if file == f"Frase{num}.txt":
+                #file_path = os.path.join(raiz_dir, file)
+
+                #with open(file_path, "r", encoding="utf-8") as f:
+                    #mensagem = f.read().strip()
+                #break
+
+        #return mensagem
 
     @staticmethod
     def localiza_imagem(lista_imgs, precisao=0.8, ):
