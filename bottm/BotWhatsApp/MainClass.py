@@ -32,13 +32,16 @@ warnings.filterwarnings("ignore", category=SyntaxWarning)
 ###############
 
 
-raiz = r"\\100.96.1.3\transfer"
-l = rf"{raiz}\imgs_referencia\form_msg.png"
-raiz_status = fr"{raiz}\status_bots"
-raiz_logs = rf"{raiz}\logs\log_transacional"
-dir_log_imgs = rf"{raiz}\logs\log_img"
-raiz_projeto = fr"{raiz}"
-img_form_msg = rf"{raiz}\imgs_referencia\form_msg.png"
+#raiz = r"\\100.96.1.3\transfer"
+#l = rf"{raiz}\imgs_referencia\form_msg.png"
+#raiz_status = fr"{raiz}\status_bots"
+#raiz_logs = rf"{raiz}\logs\log_transacional"
+#dir_log_imgs = rf"{raiz}\logs\log_img"
+#raiz_projeto = fr"{raiz}"
+#img_form_msg = rf"{raiz}\imgs_referencia\form_msg.png"
+
+# As variáveis de caminho (raiz, raiz_logs, etc.) agora são importadas diretamente de config.py
+# As coordenadas da tela são mantidas aqui, pois são específicas da automação.
 
 
 x_formulario_msg = 615
@@ -176,6 +179,10 @@ class Tools:
 
         # GRAVA SIMPLES NO ARQUIVO
         caminho_log = os.path.join(raiz_logs, f"log_{canal}.txt")
+
+        #Garante que o diretório log existe
+        os.makedirs(os.path.dirname(caminho_log), exist_ok=True)
+
         with open(caminho_log, "a", encoding="utf-8") as f:
             f.write(f"{timestamp};{msg}\n")
 
@@ -647,9 +654,10 @@ class Tools:
 
 
     @staticmethod
-    def status_msg_ativo(x=650, y=250, largura=300, altura=400, caminho_ref=r"\\100.96.1.3\transfer\imgs_referencia\img_ref_sem_mensagem_ativa.png", limiar=0.99, save_teste=None):
+    #def status_msg_ativo(x=650, y=250, largura=300, altura=400, caminho_ref=r"\\100.96.1.3\transfer\imgs_referencia\img_ref_sem_mensagem_ativa.png", limiar=0.99, save_teste=None):
+    def status_msg_ativo(x=650, y=250, largura=300, altura=400, caminho_ref=None, limiar=0.9, save_teste=None):
         """
-        FUNCAO PARA VALIDAR SE EXISTE MENSAGEM ATIVA NA CONVERSA COM O CLIENTEE
+        FUNCAO PARA VALIDAR SE EXISTE MENSAGEM ATIVA NA CONVERSA COM O CLIENTE
         AO ABRIR A CONVERSA, O LADO DO ROBO PRECISA ESTAR VAZIO
         :param x:
         :param y:
@@ -660,9 +668,17 @@ class Tools:
         :return:
         """
 
+        if caminho_ref is None:
+            caminho_ref = os.path.join(dir_imgs_ref, "img_ref_sem_mensagem_ativa.png")
+
         # Captura a região especificada
         screenshot = pyautogui.screenshot(region=(x, y, largura, altura))
         if save_teste:
+            # Garante que o diretório de teste exista
+            dir_teste = os.path.join(dir_imgs_ref, "testes")
+            os.makedirs(dir_teste, exist_ok=True) #tirar
+            screenshot.save(os.path.join(dir_teste, "img_teste.png"))
+
             screenshot.save(r"\\100.96.1.3\transfer\imgs_referencia\testes\img_teste.png")
         # Converte para formato OpenCV
         screenshot_cv = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
@@ -670,9 +686,15 @@ class Tools:
         # Carrega imagem de referência
         img_ref = cv2.imread(caminho_ref)
 
-        # Redimensiona a imagem de referência se necessário
-        if screenshot_cv.shape != img_ref.shape:
+        if img_ref is not None and screenshot_cv.shape != img_ref.shape:
             img_ref = cv2.resize(img_ref, (largura, altura))
+        elif img_ref is None:
+            Tools.log(msg=f"ERRO: Não foi possível carregar a imagem de referência em '{caminho_ref}'", canal=Tools.canal)
+            return 0 # Retorna 0 (dismatch) se a imagem não puder ser carregada
+
+        # Redimensiona a imagem de referência se necessário
+       # if screenshot_cv.shape != img_ref.shape:
+            #img_ref = cv2.resize(img_ref, (largura, altura))
 
         # Compara usando matchTemplate
         resultado = cv2.matchTemplate(screenshot_cv, img_ref, cv2.TM_CCOEFF_NORMED)

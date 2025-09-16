@@ -4,8 +4,12 @@
 import os
 
 # RAIZ ÚNICA
-DIR_RAIZ      = r"\\100.96.1.3"
-DIR_TRANSFER  = os.path.join(DIR_RAIZ, "transfer")
+#DIR_RAIZ      = r"\\100.96.1.3"
+#DIR_TRANSFER  = os.path.join(DIR_RAIZ, "transfer")
+#DIR_RAIZ      = r"\\100.96.1.3"
+#DIR_TRANSFER  = os.path.join(DIR_RAIZ, "transfer")
+DIR_RAIZ      = "."  # Aponta para o diretório atual do projeto
+DIR_TRANSFER  = os.path.join(DIR_RAIZ, "")
 
 # DIRETORIOS DERIVADOS DA MESMA RAIZ
 dir_projeto         = DIR_RAIZ

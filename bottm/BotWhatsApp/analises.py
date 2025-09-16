@@ -1,7 +1,7 @@
 from MainClass import *
 
 
-canal = "terra"
+canal = "teste"
 mailing = Tools.mailing(canal=canal)
 
 
