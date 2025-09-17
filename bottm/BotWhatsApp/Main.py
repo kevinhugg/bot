@@ -80,7 +80,7 @@ while True:
 
                 # VALIDAÇÃO DO NÚMERO DO CLIENTE
                 Tools.log(msg="VALIDANDO TELEFONE DO CLIENTE", canal=canal)
-                time.sleep(sleep_geral)
+                Tools.espera(1.2, 2.4)
 
                 try:
                     loc = Tools.localiza_imagem(lista_imgs=[img_telefone_invalido])
@@ -111,7 +111,7 @@ while True:
 
                 # MONTA E ENVIA MENSAGEM
                 Tools.log(msg="SELECIONANDO TEMPLATE DE MENSAGEM (TM)", canal=canal)
-                time.sleep(12)
+                Tools.espera(2.0, 5.0)
                 msg_tm = Tools.tm_mensagem()
                 Tools.log(msg=f"TM SELECIONADO {msg_tm}", canal=canal)
 
@@ -131,7 +131,7 @@ while True:
                     status_formulario = Tools.valida_caixa_texto(cliente=linha['Cliente'], msg_tm=msg_tm, lead=lead)
                     if status_formulario == 1:
                         break
-                    time.sleep(2)
+                    Tools.espera(1.0, 2.2)
 
                     Tools.pressionar_tecla(tecla1="tab")
                     Tools.pressionar_tecla(tecla1="tab")
@@ -140,7 +140,7 @@ while True:
                     Tools.log(msg="ERRO AO LOCALIZAR FOMULARIO, PULANDO PARA PROXIMO LEAD", canal=canal)
                     continue
 
-                time.sleep(18) #era 1
+                Tools.espera(3.5, 6.0) #era 1
 
                 # ANEXA IMAGEM DA CAMPANHA
                 Tools.log(msg="ABRINDO SELETOR E ANEXANDO IMAGENS DA CAMPANHA", canal=canal)
@@ -158,7 +158,7 @@ while True:
                 )
 
                 Tools.log(msg="FINAL DA ITERAÇÃO | PAUSA ENTRE LEADS", canal=canal)
-                time.sleep(sleep_geral)
+                Tools.espera(1.2, 2.4)
 
         # FIM DO PROCESSO NORMAL: ENCERRA E ATUALIZA STATUS
         Tools.log(msg="PROCESSO FINALIZADO SEM EXCEÇÕES | ATUALIZANDO STATUS DO BOT PARA 0 (INATIVO)", canal=canal)

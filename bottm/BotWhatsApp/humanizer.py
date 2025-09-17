@@ -10,7 +10,7 @@ class HumanizeConfig:
 
     #Pausas gerais entre as ações
     min_wait: float = 1.2
-    max_wait: float 3.8
+    max_wait: float = 3.8
 
     #Ao clicar ou mover
     mouse_move_min: float = 0.35
@@ -31,7 +31,7 @@ class HumanizeConfig:
 
 class Humanizer:
     def __init__(self, cfg: HumanizeConfig | None = None):
-        self.cgf = cfg or HumanizeConfig()
+        self.cfg = cfg or HumanizeConfig()
         pgui.FAILSAFE = False
 
         #ESPERAS
@@ -42,13 +42,20 @@ class Humanizer:
         b = self.cfg.max_wait if max_s is None else max_s
         time.sleep(random.uniform(a, b))
 
+    def micro(self):
+        self.esperar(self.cfg.micro_min, self.cfg.micro_max)
+
     #MOUSE
     def move_to(self, x: int, y: int, duration: float | None = None, jitter: int | None = None):
+        if not self.cfg.enabled:
+            pgui.moveTo(x, y, duration=0)
+            return
+
         if duration is None:
-            duration = random.uniform(self.cfg.mouse_move_min, self.cfg.mouse_move_max) if self.enabled else 0
+            duration = random.uniform(self.cfg.mouse_move_min, self.cfg.mouse_move_max)
         if jitter is None:
             jitter = self.cfg.mouse_jitter_px
-        jx = random.radint(-jitter, jitter)
+        jx = random.randint(-jitter, jitter)
         jy = random.randint(-jitter, jitter)
         pgui.moveTo(x + jx, y + jy, duration=duration)
 
@@ -71,7 +78,7 @@ class Humanizer:
         pgui.hotkey("ctrl", "v")
 
     def escrever(self, msg: str, force_type: bool | None = None):
-        use_type = (random.random() < self.cfg.prob.type) if force_type is None else force_type
+        use_type = (random.random() < self.cfg.prob_type) if force_type is None else force_type
         if use_type:
             self.digitar(msg)
         else:
@@ -87,7 +94,7 @@ class Humanizer:
 #Singleton
 _default = Humanizer()
 
-def espera(min_s: float = 1.5, max_s: float = 4.0):
+def esperar(min_s: float = 1.5, max_s: float = 4.0):
     _default.espera(min_s, max_s)
 
 def escrever(msg:str):

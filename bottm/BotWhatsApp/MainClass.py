@@ -22,6 +22,11 @@ import cv2
 import pyautogui
 import mouse
 import os
+
+from humanizer import Humanizer, HumanizeConfig
+
+_hcfg = HumanizeConfig(enabled=True)
+_human = Humanizer(_hcfg)
 #################
 
 # SUPRIME AVISOS
@@ -230,31 +235,52 @@ class Tools:
         if sleep:
             time.sleep(sleep)
 
+########################
+####    ANTIGOS     ####
+########################
+    #@staticmethod
+    #def click(posicao, sleep=None):
+
+        #x = posicao[0]
+        #y = posicao[1]
+
+        #try:
+            #pgui.click([x, y])
+
+            #if sleep:
+                #time.sleep(sleep)
+
+        #except Exception as e:
+            #print(f"Erro | {e}")
+
+    #@staticmethod
+    #def escreve(msg, sleep=None, press_enter=None):
+
+        #pgui.write(message=msg)
+
+        #if sleep:
+            #time.sleep(sleep)
+
+        #if press_enter:
+            #Tools.pressionar_tecla(tecla1="enter")
+
     @staticmethod
-    def click(posicao, sleep=None):
-
-        x = posicao[0]
-        y = posicao[1]
-
-        try:
-            pgui.click([x, y])
-
-            if sleep:
-                time.sleep(sleep)
-
-        except Exception as e:
-            print(f"Erro | {e}")
+    def espera(min_s=1.4, max_s=3.9):
+        _human.espera(min_s, max_s)
 
     @staticmethod
-    def escreve(msg, sleep=None, press_enter=None):
+    def click(posicao, clicks: int = 1, button: str = "left"):
+        x =posicao[0]
+        y =posicao[1]
+        _human.click(x, y, clicks=clicks, button=button)
 
-        pgui.write(message=msg)
+    @staticmethod
+    def escreve(msg:str, force_type: bool | None = None):
+        _human.escrever(msg, force_type=force_type)
 
-        if sleep:
-            time.sleep(sleep)
-
-        if press_enter:
-            Tools.pressionar_tecla(tecla1="enter")
+    @staticmethod
+    def enter(delay_min: float = 0.3, delay_max: float = 0.9):
+        _human.enter(delay_min=delay_min, delay_max=delay_max)
 
     @staticmethod
     def pressionar_tecla(tecla1, tecla2=None, sleep=None, press_enter=None):
@@ -322,7 +348,7 @@ class Tools:
         form_msg = os.path.join(raiz_dir, imagens_ref["form_msg"])
 
         # Aguarda um tempo antes de iniciar
-        time.sleep(espera)
+        Tools.espera(max(0.6, espera * 0.8), espera * 1.4)
 
         # LOCALIZA BOTÃO DE ANEXO
         posicao_anexar_imgs = Tools.ciclo_tentativa(
@@ -343,9 +369,10 @@ class Tools:
 
         # CLICA NO BOTÃO DE ANEXO
         Tools.click(posicao=posicao_anexar_imgs)
+        Tools.espera(0.3, 0.8)
         Tools.log_img(log_img=f"BOTAO_ANEXA_IMG_{lead}", canal=canal)
 
-        time.sleep(0.5)
+        #time.sleep(0.5)
 
         # LOCALIZA BOTÃO FOTOS E VÍDEOS
         try:
@@ -366,6 +393,7 @@ class Tools:
             Tools.log_img(log_img=f"BOTAO_FOTOS_VIDEOS_{lead}", canal=canal)
             for _ in range(2):
                 Tools.click(posicao=posicao_fotos_videos)
+                Tools.espera(0.25, 0.6)
         else:
             Tools.log(msg="BOTÃO 'FOTOS E VÍDEOS' NÃO LOCALIZADO — seguindo por atalho", canal=Tools.canal)
 
@@ -375,6 +403,7 @@ class Tools:
 
         time.sleep(espera)
         # SELECIONA O FORMULARIO DE DIRETORIOS
+        Tools.espera(max(0.6, espera * 0.8), espera * 1.4)
         Tools.pressionar_tecla(tecla1="ctrl", tecla2="l")
 
 
@@ -386,17 +415,17 @@ class Tools:
         Tools.escreve(msg=dir_img_db, press_enter="yes")
         Tools.log_img(log_img=f"SELECAO_CONJUNTO_CAMPANHA_{lead}", canal=canal)
 
-        time.sleep(espera)
+        Tools.espera(max(0.6, espera * 0.8), espera * 1.4)
         for _ in range(4):
             Tools.pressionar_tecla(tecla1="tab")
 
-        time.sleep(espera)
+        Tools.espera(max(0.6, espera * 0.8), espera * 1.4)
         Tools.pressionar_tecla(tecla1="ctrl", tecla2="a", press_enter="yes")
 
 
-        time.sleep(espera)
+        Tools.espera(max(0.6, espera * 0.8), espera * 1.4)
         pgui.press(keys="enter")
-        time.sleep(5)
+        Tools.espera(3.0, 5.0)
         """
         # LOCALIZA FORMULÁRIO DE MENSAGEM
 
@@ -496,7 +525,7 @@ class Tools:
                         print("Minimizada")
                     return status
             except Exception:
-                time.sleep(1)
+                Tools.espera(0.6, 1.2)
 
         print("Janela não encontrada.")
         return None
@@ -549,7 +578,7 @@ class Tools:
                 return resultado
             except Exception as e:
                 Tools.log(msg=f"FALHA AO LOCALIZAR {descricao} | {e}", canal=Tools.canal)
-                time.sleep(step)
+                Tools.espera(max(0.3, step*0.6), step*1.4)
         Tools.log(msg=f"NÃO FOI POSSIVEL LOZALIZAR {descricao} APÓS {limit} TENTATIVAS", canal=Tools.canal)
 
     @staticmethod
@@ -583,7 +612,7 @@ class Tools:
     @staticmethod
     def garante_msg():
         loc = None
-        time.sleep(2)
+        Tools.espera(1.0, 2.0)
         try:
             loc = Tools.localiza_imagem(lista_imgs=[l])
             status = 1
@@ -591,7 +620,8 @@ class Tools:
             status = 0
         if loc:
             for _ in range(3):
-                pgui.click(loc[0], loc[1])
+                Tools.click(loc)
+                Tools.espera(0.15, 0.35)
         else: raise Exception("Erro | imagem não localizada")
 
     @staticmethod
@@ -608,21 +638,18 @@ class Tools:
         Tools.log(msg=f"ACESSANDO FORMULARIO DE MENSAGEM", canal=Tools.canal)
 
         if click_point:
-            # Clica várias vezes ali para garantir foco
             for _ in range(3):
-                pgui.click(x=click_point[0], y=click_point[1], button="left")
-                time.sleep(0.1)
+                Tools.click((click_point[0], click_point[1]))
+                Tools.espera(0.08, 0.18)
         else:
-            # Fallback antigo (só se não acharmos a imagem)
             for _ in range(5):
-                pgui.click(x=x_formulario_msg, y=y_formulario_msg, button="left")
+                Tools.click((x_formulario_msg, y_formulario_msg))
+                Tools.espera(0.08, 0.18)
 
         Tools.log(msg=f"ESCREVENDO A MENSAGEM", canal=Tools.canal)
-        pyperclip.copy(f"Olá, {cliente}! {msg_tm}")
-        pgui.hotkey('ctrl', 'v')
-        time.sleep(1)
-        pgui.press("enter")
-        time.sleep(2)
+        Tools.escreve(f"Olá, {cliente}! {msg_tm}")
+        Tools.enter()
+        Tools.espera(0.8, 1.6)
 
     @staticmethod
     def gera_print(dir_destino, nome_img):
