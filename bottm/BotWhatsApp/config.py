@@ -8,8 +8,9 @@ import os
 #DIR_TRANSFER  = os.path.join(DIR_RAIZ, "transfer")
 #DIR_RAIZ      = r"\\100.96.1.3"
 #DIR_TRANSFER  = os.path.join(DIR_RAIZ, "transfer")
-DIR_RAIZ      = "."  # Aponta para o diretório atual do projeto
-DIR_TRANSFER  = os.path.join(DIR_RAIZ, "")
+DIR_RAIZ = r"C:\BW\transfer-2"
+DIR_TRANSFER = DIR_RAIZ
+
 
 # DIRETORIOS DERIVADOS DA MESMA RAIZ
 dir_projeto         = DIR_RAIZ
@@ -18,13 +19,14 @@ dir_imgs_ref        = os.path.join(DIR_TRANSFER, "imgs_referencia")
 dir_logs            = os.path.join(DIR_TRANSFER, "logs")
 dir_logs_trans      = os.path.join(dir_logs, "log_transacional")
 dir_logs_img        = os.path.join(dir_logs, "log_img")
+
 dir_status_bots     = os.path.join(DIR_TRANSFER, "status_bots")
 
 # DIRETORIOS OPERACIONAIS
 dir_mailing         = os.path.join(DIR_TRANSFER, "mailing")
 dir_dump_discagem   = os.path.join(DIR_TRANSFER, "dump_discagem")
-dir_tm_msgs         = os.path.join(DIR_TRANSFER, r"tm\msgs")
 dir_tm_imgs         = os.path.join(DIR_TRANSFER, r"tm\imgs")
+dir_tm_msgs         = os.path.join(DIR_TRANSFER, r"tm\msgs")
 
 # DIRETORIOS DE IMAGENS DE REFERENCIA - APENAS NOMES DAS IMAGENS
 imagens_ref = {

@@ -72,11 +72,11 @@ while True:
                 # ABRE O WHATSAPP DESKTOP
                 Tools.log(msg="ABRINDO WHATSAPP DESKTOP VIA URL (WA.ME)", canal=canal)
                 Tools.abre_whatsapp_desktop(lead, sleep=3)
-                Tools.log_img(log_img=f"ABERTURA_WHATSAPP_{lead}", canal=canal)
+                #Tools.log_img(log_img=f"ABERTURA_WHATSAPP_{lead}", canal=canal)
 
                 Tools.log(msg="GARANTINDO JANELA DO WHATSAPP EM PRIMEIRO PLANO (MAXIMIZAÇÃO)", canal=canal)
                 Tools.maximiza_janela("WhatsApp")
-                Tools.log_img(log_img=f"VALIDACAO_ABERTURA_WHATSAPP_{lead}", canal=canal)
+                #Tools.log_img(log_img=f"VALIDACAO_ABERTURA_WHATSAPP_{lead}", canal=canal)
 
                 # VALIDAÇÃO DO NÚMERO DO CLIENTE
                 Tools.log(msg="VALIDANDO TELEFONE DO CLIENTE", canal=canal)
@@ -86,7 +86,7 @@ while True:
                     loc = Tools.localiza_imagem(lista_imgs=[img_telefone_invalido])
                     status = 1
                     Tools.log(msg="TELA 'TELEFONE INVÁLIDO' LOCALIZADA", canal=canal)
-                    Tools.log_img(log_img=f"VALIDACAO_TELEFONE_{lead}", canal=canal)
+                    #Tools.log_img(log_img=f"VALIDACAO_TELEFONE_{lead}", canal=canal)
                 except Exception:
                     status = 0
                     Tools.log(msg="TELA 'TELEFONE INVÁLIDO' NÃO LOCALIZADA, SEGUINDO O FLUXO", canal=canal)
@@ -103,24 +103,17 @@ while True:
                     continue
 
                 Tools.log(msg="VALIDANDO SE EXISTE MENSAGEM ATIVA DA CAMPANHA", canal=canal)
-                status_msg_ativo = Tools.status_msg_ativo()
+                status_msg_ativo = Tools.status_msg_ativo(limiar=0.80, save_teste=True)
+                #Tools.log_img(log_img=f"STATUS_MSG_{lead}", canal=canal)
                 if status_msg_ativo == 0:
                     Tools.log(msg=f"STATUS 0, MENSAGEM ATIVA NO TELEFONE {lead}", canal=canal)
                     continue
 
-
-                # ANEXA IMAGEM DA CAMPANHA
-                Tools.log(msg="ABRINDO SELETOR E ANEXANDO IMAGENS DA CAMPANHA", canal=canal)
-                Tools.anexa_img_campanha(canal=canal, espera=sleep_geral, lead=lead)
-                Tools.log_img(log_img=f"VALIDACAO_BTN_ANEXAR_IMG_{lead}", canal=canal)
-
                 # MONTA E ENVIA MENSAGEM
                 Tools.log(msg="SELECIONANDO TEMPLATE DE MENSAGEM (TM)", canal=canal)
-                time.sleep(2)
+                time.sleep(12)
                 msg_tm = Tools.tm_mensagem()
                 Tools.log(msg=f"TM SELECIONADO {msg_tm}", canal=canal)
-
-                time.sleep(1)
 
                 # LOCALIZA O FORMULÁRIO DE MENSAGEM
                 Tools.log(msg="LOCALIZANDO FORMULÁRIO DE MENSAGEM NA TELA", canal=canal)
@@ -134,15 +127,27 @@ while True:
 
                 # VALIDA E ESCREVE A MENSAGEM NA CAIXA DE TEXTO
                 Tools.log(msg="VALIDANDO CAIXA DE TEXTO E INSERINDO MENSAGEM", canal=canal)
-                time.sleep(10)
-                status_formulario = Tools.valida_caixa_texto(cliente=linha['Cliente'], msg_tm=msg_tm, lead=lead
-                                                             )
+                for tentativa in range(2):
+                    status_formulario = Tools.valida_caixa_texto(cliente=linha['Cliente'], msg_tm=msg_tm, lead=lead)
+                    if status_formulario == 1:
+                        break
+                    time.sleep(2)
+
+                    Tools.pressionar_tecla(tecla1="tab")
+                    Tools.pressionar_tecla(tecla1="tab")
+
                 if status_formulario == 0:
                     Tools.log(msg="ERRO AO LOCALIZAR FOMULARIO, PULANDO PARA PROXIMO LEAD", canal=canal)
                     continue
 
+                time.sleep(18) #era 1
 
-                Tools.log_img(log_img=f"SELECAO_TM_{lead}", canal=canal)
+                # ANEXA IMAGEM DA CAMPANHA
+                Tools.log(msg="ABRINDO SELETOR E ANEXANDO IMAGENS DA CAMPANHA", canal=canal)
+                Tools.anexa_img_campanha(canal=canal, espera=sleep_geral, lead=lead)
+                #Tools.log_img(log_img=f"VALIDACAO_BTN_ANEXAR_IMG_{lead}", canal=canal)
+
+                #Tools.log_img(log_img=f"SELECAO_TM_{lead}", canal=canal)
 
                 # REGISTRA A DISCAGEM (SUCESSO)
                 Tools.log(msg=f"REGISTRANDO DISCAGEM (SUCESSO) | TELEFONE={lead}", canal=canal)

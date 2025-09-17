@@ -1,62 +1,35 @@
-import sys
-import pyautogui
-import cv2
-import numpy as np
-import pyautogui
-import time
+import sys, os, time
+import pyautogui, cv2, numpy as np
+from config import dir_imgs_ref
 
+x, y, largura, altura = 650, 250, 300, 400
+os.makedirs(dir_imgs_ref, exist_ok=True)
 
-x=650
-y=250
-largura = 300
-altura = 400
+caminho_ref = os.path.join(dir_imgs_ref, "img_ref_sem_mensagem_ativa.png")
 
+def captura_ref():
+    ref_img = pyautogui.screenshot(region=(x, y, largura, altura))
+    ref_img.save(caminho_ref)
+    print(f"Referência criada em: {caminho_ref}")
 
-def mouse_posicao():
-    time.sleep(2)
-    x, y = pyautogui.position()
-    print(f"x={x}, y={y}")
-
-
-def captura_retangulo(x, y, largura, altura, caminho_saida):
-    # Captura a região especificada
+def compara_imagem(caminho_ref, limiar=0.85):
     screenshot = pyautogui.screenshot(region=(x, y, largura, altura))
-    # Salva no caminho informado
-    screenshot.save(caminho_saida)
-
-def compara_imagem(x, y, largura, altura, caminho_ref, limiar=0.99):
-    # Captura a região especificada
-    screenshot = pyautogui.screenshot(region=(x, y, largura, altura))
-
-    # Converte para formato OpenCV
     screenshot_cv = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
 
-    # Carrega imagem de referência
     img_ref = cv2.imread(caminho_ref)
+    if img_ref is None:
+        raise FileNotFoundError(f"Não encontrei a referência: {caminho_ref}")
 
-    # Redimensiona a imagem de referência se necessário
     if screenshot_cv.shape != img_ref.shape:
         img_ref = cv2.resize(img_ref, (largura, altura))
 
-    # Compara usando matchTemplate
     resultado = cv2.matchTemplate(screenshot_cv, img_ref, cv2.TM_CCOEFF_NORMED)
-    similaridade = np.max(resultado)
-
-    # Retorna 1 para match e 0 para dismatch
+    similaridade = float(np.max(resultado))
+    print(f"similaridade={similaridade:.4f}")
     return 1 if similaridade >= limiar else 0
 
-time.sleep(2)
-status = compara_imagem(x=x, y=y, largura=largura, altura=altura, caminho_ref=r"C:\Users\ferrati\Documents\img_ref_sem_mensagem_ativa.png")
-
-
-print(status)
-sys.exit()
-
-time.sleep(2)
-captura_retangulo(
-    x=x
-    , y=y
-    , largura=300
-    , altura=400
-    , caminho_saida=r"C:\Users\ferrati\Documents\teste.png"
-)
+if not os.path.isfile(caminho_ref):
+    captura_ref()
+else:
+    status = compara_imagem(caminho_ref)
+    print("STATUS:", status)

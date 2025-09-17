@@ -326,12 +326,20 @@ class Tools:
 
         # LOCALIZA BOTÃO DE ANEXO
         posicao_anexar_imgs = Tools.ciclo_tentativa(
-            funcao=Tools.localiza_imagem
-            , args=([btn_anexar_img],)
-            , limit=limit
-            , step=step
-            , descricao="BOTÃO ANEXO"
+            funcao=Tools.localiza_imagem,
+            args=([btn_anexar_img],),
+            kwargs={"precisao": 0.75},  # baixa temporariamente p/ achar o clipe
+            limit=limit,
+            step=step,
+            descricao="BOTÃO ANEXO"
         )
+        #posicao_anexar_imgs = Tools.ciclo_tentativa(
+            #funcao=Tools.localiza_imagem
+            #, args=([btn_anexar_img],)
+            #, limit=limit
+            #, step=step
+            #, descricao="BOTÃO ANEXO"
+        #)
 
         # CLICA NO BOTÃO DE ANEXO
         Tools.click(posicao=posicao_anexar_imgs)
@@ -354,9 +362,16 @@ class Tools:
         if not posicao_fotos_videos:
             print("BOTÃO 'FOTOS E VIDEOS' NÃO LOCALIZADO")
 
-        Tools.log_img(log_img=f"BOTAO_FOTOS_VIDEOS_{lead}", canal=canal)
-        for _ in range(2):
-            Tools.click(posicao=posicao_fotos_videos)
+        if posicao_fotos_videos:
+            Tools.log_img(log_img=f"BOTAO_FOTOS_VIDEOS_{lead}", canal=canal)
+            for _ in range(2):
+                Tools.click(posicao=posicao_fotos_videos)
+        else:
+            Tools.log(msg="BOTÃO 'FOTOS E VÍDEOS' NÃO LOCALIZADO — seguindo por atalho", canal=Tools.canal)
+
+        #Tools.log_img(log_img=f"BOTAO_FOTOS_VIDEOS_{lead}", canal=canal)
+        #for _ in range(2):
+            #Tools.click(posicao=posicao_fotos_videos)
 
         time.sleep(espera)
         # SELECIONA O FORMULARIO DE DIRETORIOS
@@ -585,13 +600,22 @@ class Tools:
         print(f"{pos}")
 
     @staticmethod
-    def monta_msg(cliente, msg_tm):
-
-
-
+    def monta_msg(cliente, msg_tm, click_point=None):
+        """
+        click_point: (x, y) onde vamos clicar para focar o input de mensagem.
+        Se None, cai no fallback das coordenadas antigas.
+        """
         Tools.log(msg=f"ACESSANDO FORMULARIO DE MENSAGEM", canal=Tools.canal)
-        for i in range(5):
-            pgui.click(x=x_formulario_msg, y=y_formulario_msg, button="left")
+
+        if click_point:
+            # Clica várias vezes ali para garantir foco
+            for _ in range(3):
+                pgui.click(x=click_point[0], y=click_point[1], button="left")
+                time.sleep(0.1)
+        else:
+            # Fallback antigo (só se não acharmos a imagem)
+            for _ in range(5):
+                pgui.click(x=x_formulario_msg, y=y_formulario_msg, button="left")
 
         Tools.log(msg=f"ESCREVENDO A MENSAGEM", canal=Tools.canal)
         pyperclip.copy(f"Olá, {cliente}! {msg_tm}")
@@ -619,31 +643,42 @@ class Tools:
         img.save(f"{caminho_destino}.png")
 
     @staticmethod
+    @staticmethod
     def valida_caixa_texto(cliente, msg_tm, lead):
-
         try:
-            localizacao = pyautogui.locateOnScreen(img_form_msg, confidence=0.8)
+            localizacao = pyautogui.locateOnScreen(img_form_msg, confidence=0.80)
             if localizacao:
-                Tools.monta_msg(cliente=cliente, msg_tm=msg_tm)
+                # Calcula o centro da imagem e clica levemente à direita,
+                # para evitar pegar alguma borda do placeholder/ícone
+                centro = pyautogui.center(localizacao)
+                click_x = centro.x + 120  # ajuste fino: lado direito do campo
+                click_y = centro.y
+
+                # Print de referência para debug do alvo
+                try:
+                    Tools.log_img(log_img=f"ALVO_FORM_MSG_{lead}", canal=Tools.canal)
+                except Exception:
+                    pass
+
+                Tools.monta_msg(cliente=cliente, msg_tm=msg_tm, click_point=(click_x, click_y))
                 return 1
             else:
+                Tools.log(msg="ERRO: FORMULÁRIO NÃO LOCALIZADO (img_form_msg não bateu)", canal=Tools.canal)
                 return 0
-                print("ERRO: FORMULARIO NÃO LOCALIZADO")
-            return 1
         except pyautogui.ImageNotFoundException as e:
+            Tools.log(msg=f"ERRO: FORMULÁRIO NÃO LOCALIZADO {e}", canal=Tools.canal)
             return 0
-            print(f"ERRO: FORMULARIO NÃO LOCALIZADO {e}")
 
     @staticmethod
-    def log_img(log_img, canal, ativar=None):
+    def log_img(log_img, canal, ativar=True): #depois volta para None
         if ativar:
 
             try:
-                # REALIZA CAPITURA DA TELA
+                # REALIZA CAPTURA DA TELA
                 screenshot = pyautogui.screenshot()
 
                 # SALVA A IMAGEM NO DIRETORIO DESTINO DOS LOGS
-                screenshot.save(rf"{dir_log_imgs}\{log_img}_{time.strftime(f"%Y%m%d%H%M%S")}.png")
+                screenshot.save(rf"{raiz_log_imgs}\{log_img}_{time.strftime(f"%Y%m%d%H%M%S")}.png")
 
                 Tools.log(msg=rf"Logs de imagem salvo com sucesso", canal=canal)
             except Exception as e:
@@ -679,7 +714,6 @@ class Tools:
             os.makedirs(dir_teste, exist_ok=True) #tirar
             screenshot.save(os.path.join(dir_teste, "img_teste.png"))
 
-            screenshot.save(r"\\100.96.1.3\transfer\imgs_referencia\testes\img_teste.png")
         # Converte para formato OpenCV
         screenshot_cv = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
 
@@ -699,6 +733,14 @@ class Tools:
         # Compara usando matchTemplate
         resultado = cv2.matchTemplate(screenshot_cv, img_ref, cv2.TM_CCOEFF_NORMED)
         similaridade = np.max(resultado)
+
+        # DEBUG: loga similaridade para diagnóstico
+        try:
+            from config import dir_logs_trans as _dir_logs_trans
+            with open(os.path.join(_dir_logs_trans, 'debug_status_msg_ativo.txt'), 'a', encoding='utf-8') as _f:
+                _f.write(f"{time.strftime('%y-%m-%d %H:%M:%S')};similaridade={similaridade:.4f}\n")
+        except Exception:
+            pass
 
         # Retorna 1 para match e 0 para dismatch
         return 1 if similaridade >= limiar else 0
