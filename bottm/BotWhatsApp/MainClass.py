@@ -22,6 +22,8 @@ import cv2
 import pyautogui
 import mouse
 import os
+from db import read_df, get_conn
+import re
 
 from humanizer import Humanizer, HumanizeConfig
 
@@ -61,118 +63,178 @@ class Tools:
     # MAILING
     @staticmethod
     def mailing(canal):
-        df_mailing = None
-        df_discagem = None
+            device = canal.lower()
+            import pandas as pd
+            from db import get_conn
+
+            df = pd.DataFrame(columns=["Cliente", "Telefone"])
+            try:
+                with get_conn() as conn:
+                    q = "select cliente as Cliente, telefone as Telefone from mailing where device=%s"
+                    df = pd.read_sql(q, conn, params=[device])
+            except Exception as e:
+                Tools.log(msg=f"[mailing] erro PG: {e}", canal=canal)
+
+            # normaliza telefone
+            if not df.empty:
+                df["Telefone"] = df["Telefone"].astype(str).str.replace(r"\D+", "", regex=True)
+                df["Telefone"] = df["Telefone"].apply(lambda t: t if t.startswith("55") else "55" + t)
+
+            return df
+
+        #df_mailing = None
+        #df_discagem = None
 
         ###############
         ## ARQUIVOS ##
         ###############
-        arquivo_mailing = fr"{raiz_projeto}\mailing\mailing_{canal}.txt"
-        arquivo_discagem = fr'{raiz_projeto}\dump_discagem\discagem_{canal}.txt'
+        #arquivo_mailing = fr"{raiz_projeto}\mailing\mailing_{canal}.txt"
+        #arquivo_discagem = fr'{raiz_projeto}\dump_discagem\discagem_{canal}.txt'
 
         ##############
         ## LEITURAS ##
         ##############
-        try:
-            df_mailing = pd.read_csv(
-                arquivo_mailing
-                , sep=";"
-                , header=0
-                , names=["Cliente", "Telefone"]
-                , usecols=[0, 1]
-                , dtype=str
-            )
-        except Exception as e:
-            Tools.log(msg=f"Erro ao ler mailing: {e}", canal=Tools.canal)
-            sys.exit()
+        #try:
+        #    df_mailing = pd.read_csv(
+        #        arquivo_mailing
+        #        , sep=";"
+        #        , header=0
+        #        , names=["Cliente", "Telefone"]
+        #        , usecols=[0, 1]
+        #        , dtype=str
+        #    )
+        #except Exception as e:
+        #    Tools.log(msg=f"Erro ao ler mailing: {e}", canal=Tools.canal)
+        #    sys.exit()
 
-        try:
-            df_discagem = pd.read_csv(
-                arquivo_discagem
-                , sep=";"
-                , header=None
-                , usecols=[1]
-                , names=["Telefone"]
-                , dtype=str
-            )
-        except Exception as e:
-            Tools.log(msg=f"Arquivo de discagem não encontrado ou com erro, tratando como vazio: {e}", canal=Tools.canal)
-            df_discagem = pd.DataFrame(columns=["Telefone"])
+        #try:
+        #    df_discagem = pd.read_csv(
+        #        arquivo_discagem
+        #        , sep=";"
+        #        , header=None
+        #        , usecols=[1]
+        #        , names=["Telefone"]
+        #        , dtype=str
+        #    )
+        #except Exception as e:
+        #    Tools.log(msg=f"Arquivo de discagem não encontrado ou com erro, tratando como vazio: {e}", canal=Tools.canal)
+        #    df_discagem = pd.DataFrame(columns=["Telefone"])
             #Tools.log(msg=f"Erro ao ler discagem: {e}", canal=Tools.canal) #####ORIGINAL#####
             #sys.exit()
 
         #################################################################
         ## FORMATAÇÃO DOS TELEFONES (SOMENTE DÍGITOS E ADIÇÃO DO 55) ##
         #################################################################
-        df_mailing['Telefone'] = df_mailing['Telefone'].astype(str).str.replace(r'\D', '', regex=True).str.strip()
-        df_discagem['Telefone'] = df_discagem['Telefone'].astype(str).str.replace(r'\D', '', regex=True).str.strip()
+        #df_mailing['Telefone'] = df_mailing['Telefone'].astype(str).str.replace(r'\D', '', regex=True).str.strip()
+        #df_discagem['Telefone'] = df_discagem['Telefone'].astype(str).str.replace(r'\D', '', regex=True).str.strip()
 
-        df_mailing['Telefone'] = df_mailing['Telefone'].apply(lambda x: x if x.startswith('55') else '55' + x)
-        df_discagem['Telefone'] = df_discagem['Telefone'].apply(lambda x: x if x.startswith('55') else '55' + x)
+        #df_mailing['Telefone'] = df_mailing['Telefone'].apply(lambda x: x if x.startswith('55') else '55' + x)
+        #df_discagem['Telefone'] = df_discagem['Telefone'].apply(lambda x: x if x.startswith('55') else '55' + x)
 
         ##################################################
         ## RETORNA MAILING COMPLETO OU FILTRADO POR DISCAGEM ##
         ##################################################
-        if canal.lower() == "teste":
-            df = df_mailing.copy()  # sem filtro
-        else:
-            df = df_mailing[~df_mailing["Telefone"].isin(df_discagem["Telefone"])].copy()
+        #if canal.lower() == "teste":
+        #    df = df_mailing.copy()  # sem filtro
+        #else:
+        #    df = df_mailing[~df_mailing["Telefone"].isin(df_discagem["Telefone"])].copy()
         #df = df_mailing[~df_mailing["Telefone"].isin(df_discagem["Telefone"])].copy()
 
         ###############
         ## REMOVER DUPLICADOS ##
         ###############
-        df = df.drop_duplicates(subset=["Telefone"])
-        return df
+        #df = df.drop_duplicates(subset=["Telefone"])
+        #return df
 
     # REGISTRA DISCAGEM
     @staticmethod
     def registra_discagem(datadiscagem, telefone, canal, status):
+        from db import get_conn
+        tel = re.sub(r"\D+", "", str(telefone))
+        if not tel.startswith("55"):
+            tel = "55" + tel
         try:
+            with get_conn() as conn, conn.cursor() as cur:
+                cur.execute("""
+                            insert into discagem (datadiscagem, telefone, canal, status)
+                            values (%s, %s, %s, %s)
+                            """, (datadiscagem, tel, canal.lower(), int(status)))
+            Tools.log(msg=f"[discagem] inserido {tel} ({canal})", canal=canal)
+        except Exception as e:
+            Tools.log(msg=f"[discagem] erro {tel} | {e}", canal=canal)
+
+        #try: ANTIGO ##############
             # garante a pasta dump_discagem
-            dir_dump = fr'{raiz_projeto}\dump_discagem'
-            os.makedirs(dir_dump, exist_ok=True)
+            #dir_dump = fr'{raiz_projeto}\dump_discagem'
+            #os.makedirs(dir_dump, exist_ok=True)
 
             # mantém o mesmo caminho e formato
-            with open(fr'{dir_dump}\discagem_{canal}.txt', 'a', encoding='utf-8') as f:
+            #with open(fr'{dir_dump}\discagem_{canal}.txt', 'a', encoding='utf-8') as f:
                 # campos: DataDiscagem;Telefone;Status
-                f.write(f"{datadiscagem};{telefone};{status}\n")
+            #   f.write(f"{datadiscagem};{telefone};{status}\n")
 
-            Tools.log(msg=f"DISCAGEM ADICIONADA COM SUCESSO", canal=Tools.canal)
-        except Exception as e:
-            Tools.log(msg=f"ERRO AO REGISTRAR DISCAGEM | {e}", canal=Tools.canal)
+            #Tools.log(msg=f"DISCAGEM ADICIONADA COM SUCESSO", canal=Tools.canal)
+        #except Exception as e:
+            #Tools.log(msg=f"ERRO AO REGISTRAR DISCAGEM | {e}", canal=Tools.canal)
 
     # VALIDA STATUS
     @staticmethod
     def valida_status_bot(canal):
-        canal = canal.lower()
-        caminho = os.path.join(raiz_status, f"status_{canal}.txt")
-
         try:
-            df = pd.read_csv(caminho, sep=";", header=None)  # Sem cabeçalho
-            status = df.iloc[0, 1]  # Pega valor da linha 0, coluna 1
-            return status
+            df = read_df("select status from status_bot where canal=%s limit 1", [canal.lower()])
+            if df.empty:
+                #se nao tiver para o canal cria como 1 ativo na primeira execução
+                with get_conn() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute("insert into status_bot (canal, status) values (%s, %s)", (canal.lower(), 1))
+                        conn.commit()
+                return 1
+            return int(df.iloc[0, 0])
         except Exception as e:
-            Tools.log(msg=f"Erro ao ler o status do bot: {e}", canal=canal)
-            return None
+            Tools.log(msg=f"Erro ao ler status (PG): {e}", canal=canal)
+            return 0 #segurança
+
+        #canal = canal.lower()
+        #caminho = os.path.join(raiz_status, f"status_{canal}.txt")
+
+        #try:
+        #    df = pd.read_csv(caminho, sep=";", header=None)  # Sem cabeçalho
+        #    status = df.iloc[0, 1]  # Pega valor da linha 0, coluna 1
+        #    return status
+        #except Exception as e:
+        #    Tools.log(msg=f"Erro ao ler o status do bot: {e}", canal=canal)
+        #    return None
 
     @staticmethod
     def altera_status_bot(canal, novo_status):
-        canal = canal.lower()
-        caminho = os.path.join(raiz_status, f"status_{canal}.txt")
-
         try:
+            with get_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        insert into status_bot (canal, status)
+                        values (%s, %s)
+                            on conflict (canal) do update set status = excluded.status
+                    """, (canal.lower(), int(novo_status)))
+                    conn.commit()
+            Tools.log(msg=f"Status '{canal}' -> {novo_status} (PG)", canal=Tools.canal)
+        except Exception as e:
+            Tools.log(msg=f"Erro ao alterar status (PG): {e}", canal=Tools.canal)
+
+        #canal = canal.lower()
+        #caminho = os.path.join(raiz_status, f"status_{canal}.txt")
+
+        #try:
            # LEITURA DO ARQUIVO
-            df = pd.read_csv(caminho, sep=";", header=None)
+        #    df = pd.read_csv(caminho, sep=";", header=None)
 
             # ALTERA O VALOR DO STATUS
-            df.iloc[0, 1] = novo_status
+        #    df.iloc[0, 1] = novo_status
 
             # SALVA O ARQUIVO
-            df.to_csv(caminho, sep=";", header=False, index=False)
-            print(f"Status do canal '{canal}' atualizado para '{novo_status}'.")
-        except Exception as e:
-            print(f"Erro ao alterar o status do bot: {e}")
+        #    df.to_csv(caminho, sep=";", header=False, index=False)
+        #    print(f"Status do canal '{canal}' atualizado para '{novo_status}'.")
+        #except Exception as e:
+        #    print(f"Erro ao alterar o status do bot: {e}")
 
     # LOGS
     @staticmethod

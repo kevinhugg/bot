@@ -4,3 +4,6 @@
 *.dll
 programas/
 git rm --cached *.msi
+supabase_stats.py
+etl_txt_para_pg.py
+db.py

@@ -2,6 +2,10 @@
 ## VARIAVEIS ##
 ###############
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
+DB_URL = os.getenv("DATABASE_URL")
 
 # RAIZ ÚNICA
 #DIR_RAIZ      = r"\\100.96.1.3"
