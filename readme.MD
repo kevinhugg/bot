@@ -44,8 +44,6 @@ Benefícios:
 ├─ MainClass.py             # Classe Tools (UI, logs, anexos, etc.)
 ├─ humanizer.py             # ← NOVO: módulo de humanização
 ├─ config.py                # Diretórios e HUMANIZE (config da humanização)
-├─ server.js                # API Node (whatsapp-web.js)
-├─ send.py                  # Cliente Python (chama API Node)
 ├─ mailing/
 │  └─ mailing_<canal>.txt   # Mailing de teste/produção
 ├─ dump_discagem/
@@ -73,13 +71,6 @@ Benefícios:
 pip install pyautogui pyperclip pywinauto pandas opencv-python pygetwindow psutil mouse requests
 ```
 
-### Dependências Node
-```bash
-npm install whatsapp-web.js express body-parser qrcode-terminal
-```
-
----
-
 ## Configuração
 
 1. **`config.py`**  
@@ -101,15 +92,6 @@ npm install whatsapp-web.js express body-parser qrcode-terminal
    - Importe o Humanizer.
    - Substitua `time.sleep` por `Tools.espera`.
    - Troque `pgui.click`/`pyperclip.copy` por `Tools.click`/`Tools.escreve`.
-
-4. **API Node (`server.js`)**  
-   - Sobe um servidor Express na porta `3000`.
-   - Exige `x-api-token` no header (default: `dev-token`).
-   - Endpoints:
-     - `/health`
-     - `/send/text`
-     - `/send/media`
-     - `/send/bulk`
 
 ---
 
@@ -133,19 +115,11 @@ Tudo configurável em `config.py`.
   - Classe `Tools`: novos métodos `espera`, `escreve`, `click`, `enter`.  
   - Substituição de `pyperclip+ctrl+v` e `pgui.write`.
 
-- `server.js` e `send.py`  
-  - Mantêm API de envio de mensagens.  
   - Já incluem jitter (atrasos aleatórios) no envio em lote.
 
 ---
 
 ## Execução
-
-### API Node
-```bash
-node server.js
-```
-- Na primeira vez, escaneie o QR no terminal com o WhatsApp.
 
 ### Bot Python
 ```bash
@@ -153,9 +127,7 @@ python Main.py
 ```
 
 ### Cliente Python simples
-```bash
-python send.py
-```
+
 - Pode enviar texto, mídia ou lote via CSV.
 
 ---
@@ -185,7 +157,7 @@ python send.py
 Sim. `HUMANIZE["enabled"] = False`.
 
 **Funciona no Linux/Mac?**  
-Focado em Windows (UI Automation). Node/whatsapp-web.js roda em qualquer SO.
+Focado em Windows (UI Automation).
 
 **Como adicionar novas campanhas?**  
 Crie pasta em `tm/imgs/CampanhaX` e arquivos `.txt` em `tm/msgs/`.
