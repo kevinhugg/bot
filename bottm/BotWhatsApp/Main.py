@@ -69,30 +69,47 @@ while True:
                 Tools.log(msg="ACESSANDO ÁREA DE TRABALHO (WIN + D)", canal=canal)
                 Tools.area_trabalho()
 
-                # ABRE O WHATSAPP DESKTOP
+                # ABRE O WHATSAPP DESKTOP (SEM PAUSA CEGA)
                 Tools.log(msg="ABRINDO WHATSAPP DESKTOP VIA URL (WA.ME)", canal=canal)
-                Tools.abre_whatsapp_desktop(lead, sleep=3)
+                Tools.abre_whatsapp_desktop(lead)
                 #Tools.log_img(log_img=f"ABERTURA_WHATSAPP_{lead}", canal=canal)
 
                 Tools.log(msg="GARANTINDO JANELA DO WHATSAPP EM PRIMEIRO PLANO (MAXIMIZAÇÃO)", canal=canal)
                 Tools.maximiza_janela("WhatsApp")
                 #Tools.log_img(log_img=f"VALIDACAO_ABERTURA_WHATSAPP_{lead}", canal=canal)
 
-                # VALIDAÇÃO DO NÚMERO DO CLIENTE
-                Tools.log(msg="VALIDANDO TELEFONE DO CLIENTE", canal=canal)
-                Tools.espera(1.2, 2.4)
-
+                # VALIDAÇÃO INTELIGENTE: AGUARDA A TELA CARREGAR OU DAR ERRO
+                Tools.log(msg="AGUARDANDO TELA DO WHATSAPP CARREGAR (MÁX 20S)...", canal=canal)
+                is_invalid = False
                 try:
-                    loc = Tools.localiza_imagem(lista_imgs=[img_telefone_invalido])
-                    status = 1
-                    Tools.log(msg="TELA 'TELEFONE INVÁLIDO' LOCALIZADA", canal=canal)
-                    #Tools.log_img(log_img=f"VALIDACAO_TELEFONE_{lead}", canal=canal)
+                    # Primeiro, verifica rapidamente se a tela é de telefone inválido
+                    Tools.localiza_imagem(lista_imgs=[img_telefone_invalido], precisao=0.85)
+                    is_invalid = True
+                    Tools.log(msg="TELA 'TELEFONE INVÁLIDO' LOCALIZADA.", canal=canal)
                 except Exception:
-                    status = 0
-                    Tools.log(msg="TELA 'TELEFONE INVÁLIDO' NÃO LOCALIZADA, SEGUINDO O FLUXO", canal=canal)
+                    # Se não for inválido, espera ativamente pelo campo de mensagem, que indica que a tela carregou
+                    Tools.log(msg="TELA 'TELEFONE INVÁLIDO' NÃO ENCONTRADA, AGUARDANDO TELA DE CONVERSA...", canal=canal)
+                    try:
+                        Tools.ciclo_tentativa(
+                            funcao=Tools.localiza_imagem,
+                            args=([img_form_msg],),
+                            kwargs={"precisao": 0.8},
+                            limit=20,  # Tenta por até 20 segundos
+                            step=1,
+                            descricao="CAMPO DE MENSAGEM"
+                        )
+                    except Exception as e:
+                        # Se nem a tela de inválido nem o campo de mensagem apareceram, é um erro.
+                        Tools.log(msg=f"ERRO CRÍTICO: A TELA DO WHATSAPP NÃO CARREGOU A TEMPO PARA O LEAD {lead}. DETALHE: {e}", canal=canal)
+                        # Registra como falha e pula para o próximo
+                        Tools.registra_discagem(
+                            datadiscagem=time.strftime("%Y-%m-%d %H:%M:%S"),
+                            telefone=lead, canal=canal, status=3
+                        )
+                        continue # Pula para o próximo lead
 
                 # RAMIFICAÇÃO: TELEFONE INVÁLIDO
-                if status == 1:
+                if is_invalid:
                     Tools.log(msg=f"LEAD INVÁLIDO | TELEFONE {lead} | REGISTRANDO STATUS 3 (INVÁLIDO)", canal=canal)
                     lead = lead_new if lead_new else lead
                     Tools.registra_discagem(
@@ -111,19 +128,8 @@ while True:
 
                 # MONTA E ENVIA MENSAGEM
                 Tools.log(msg="SELECIONANDO TEMPLATE DE MENSAGEM (TM)", canal=canal)
-                Tools.espera(2.0, 5.0)
-                msg_tm = Tools.tm_mensagem()
+                msg_tm = Tools.tm_mensagem() # Removida pausa desnecessária daqui
                 Tools.log(msg=f"TM SELECIONADO {msg_tm}", canal=canal)
-
-                # LOCALIZA O FORMULÁRIO DE MENSAGEM
-                Tools.log(msg="LOCALIZANDO FORMULÁRIO DE MENSAGEM NA TELA", canal=canal)
-                try:
-                    loc = Tools.localiza_imagem(lista_imgs=[img_form_msg])
-                    status = 1
-                    Tools.log(msg="FORMULÁRIO DE MENSAGEM LOCALIZADO", canal=canal)
-                except Exception:
-                    status = 0
-                    Tools.log(msg="FORMULÁRIO DE MENSAGEM NÃO LOCALIZADO (TENTAREMOS MESMO ASSIM)", canal=canal)
 
                 # VALIDA E ESCREVE A MENSAGEM NA CAIXA DE TEXTO
                 Tools.log(msg="VALIDANDO CAIXA DE TEXTO E INSERINDO MENSAGEM", canal=canal)
@@ -131,18 +137,16 @@ while True:
                     status_formulario = Tools.valida_caixa_texto(cliente=linha['Cliente'], msg_tm=msg_tm, lead=lead)
                     if status_formulario == 1:
                         break
-                    Tools.espera(1.0, 2.2)
+                    Tools.espera(1.0, 2.2) # Pausa mantida pois é para retry de uma ação específica
 
                     Tools.pressionar_tecla(tecla1="tab")
                     Tools.pressionar_tecla(tecla1="tab")
 
                 if status_formulario == 0:
-                    Tools.log(msg="ERRO AO LOCALIZAR FOMULARIO, PULANDO PARA PROXIMO LEAD", canal=canal)
+                    Tools.log(msg="ERRO AO LOCALIZAR FORMULÁRIO, PULANDO PARA PRÓXIMO LEAD", canal=canal)
                     continue
 
-                Tools.espera(3.5, 6.0) #era 1
-
-                # ANEXA IMAGEM DA CAMPANHA
+                # ANEXA IMAGEM DA CAMPANHA (SEM PAUSA CEGA ANTES)
                 Tools.log(msg="ABRINDO SELETOR E ANEXANDO IMAGENS DA CAMPANHA", canal=canal)
                 Tools.anexa_img_campanha(canal=canal, espera=sleep_geral, lead=lead)
                 #Tools.log_img(log_img=f"VALIDACAO_BTN_ANEXAR_IMG_{lead}", canal=canal)
