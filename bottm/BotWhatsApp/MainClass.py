@@ -21,9 +21,8 @@ import time
 import cv2
 import pyautogui
 import mouse
-import os
-from db import read_df, get_conn
-import re
+import os, re, csv, datetime
+from db import get_conn
 
 from humanizer import Humanizer, HumanizeConfig
 
@@ -67,20 +66,22 @@ class Tools:
             import pandas as pd
             from db import get_conn
 
-            df = pd.DataFrame(columns=["Cliente", "Telefone"])
+            q = "select cliente as Cliente, telefone as Telefone from mailing where device=%s"
+
             try:
                 with get_conn() as conn:
-                    q = "select cliente as Cliente, telefone as Telefone from mailing where device=%s"
-                    df = pd.read_sql(q, conn, params=[device])
+                    df = pd.read_sql(q, params=[device])
+                if df.empty:
+                    return df
+
+                #Normaliza Telefone
+                df ["Telefone"] = (df["Telefone"].astype(str)
+                                   .str.replace(r"\D+","", regex=True)
+                                   .map(lambda t: t if t.startswith("55") else "55"+t))
+                return df.drop_duplicates(subset=["Telefone"])
             except Exception as e:
                 Tools.log(msg=f"[mailing] erro PG: {e}", canal=canal)
-
-            # normaliza telefone
-            if not df.empty:
-                df["Telefone"] = df["Telefone"].astype(str).str.replace(r"\D+", "", regex=True)
-                df["Telefone"] = df["Telefone"].apply(lambda t: t if t.startswith("55") else "55" + t)
-
-            return df
+                return pd.DataFrame(columns=["Cliente","Telefone"])
 
         #df_mailing = None
         #df_discagem = None
@@ -149,17 +150,19 @@ class Tools:
     # REGISTRA DISCAGEM
     @staticmethod
     def registra_discagem(datadiscagem, telefone, canal, status):
+        import re
         from db import get_conn
-        tel = re.sub(r"\D+", "", str(telefone))
-        if not tel.startswith("55"):
-            tel = "55" + tel
+
+        tel = re.sub(r"\D+", "", str(telefone or ""))
+        if tel and not tel.startswith("55"):
+            tel = "55"+tel
         try:
             with get_conn() as conn, conn.cursor() as cur:
                 cur.execute("""
                             insert into discagem (datadiscagem, telefone, canal, status)
                             values (%s, %s, %s, %s)
                             """, (datadiscagem, tel, canal.lower(), int(status)))
-            Tools.log(msg=f"[discagem] inserido {tel} ({canal})", canal=canal)
+            Tools.log(msg=f"[discagem] {tel} <- canal={canal} status={status}", canal=canal)
         except Exception as e:
             Tools.log(msg=f"[discagem] erro {tel} | {e}", canal=canal)
 
@@ -180,19 +183,41 @@ class Tools:
     # VALIDA STATUS
     @staticmethod
     def valida_status_bot(canal):
+        device = canal.lower()
+        # 1) tenta no Postgres
         try:
-            df = read_df("select status from status_bot where canal=%s limit 1", [canal.lower()])
-            if df.empty:
-                #se nao tiver para o canal cria como 1 ativo na primeira execução
-                with get_conn() as conn:
-                    with conn.cursor() as cur:
-                        cur.execute("insert into status_bot (canal, status) values (%s, %s)", (canal.lower(), 1))
-                        conn.commit()
-                return 1
-            return int(df.iloc[0, 0])
+            with get_conn() as conn, conn.cursor() as cur:
+                cur.execute("select status from status_bot where canal=%s limit 1", (device,))
+                r = cur.fetchone()
+                if r:
+                    return int(r[0])
         except Exception as e:
             Tools.log(msg=f"Erro ao ler status (PG): {e}", canal=canal)
-            return 0 #segurança
+
+        # 2) fallback TXT
+        try:
+            base_dir = r"C:\BW\transfer-2\status_bots"  # ajuste se sua pasta for diferente
+            os.makedirs(base_dir, exist_ok=True)
+            path = os.path.join(base_dir, f"status_{device}.txt")
+            if os.path.isfile(path):
+                txt = open(path, encoding="utf-8").read().strip().lower()
+                m = re.search(r"(\d+)", txt)
+                st = 1 if (m and int(m.group(1)) != 0) else (0 if "inativo" in txt else 1)
+            else:
+                st = 1
+            # grava no PG para padronizar
+            try:
+                with get_conn() as conn, conn.cursor() as cur:
+                    cur.execute("""
+                                insert into status_bot (canal, status)
+                                values (%s, %s) on conflict (canal) do
+                                update set status = excluded.status
+                                """, (device, int(st)))
+            except Exception as e2:
+                Tools.log(msg=f"Erro ao criar status (PG): {e2}", canal=canal)
+            return int(st)
+        except Exception:
+            return 1
 
         #canal = canal.lower()
         #caminho = os.path.join(raiz_status, f"status_{canal}.txt")
@@ -207,18 +232,31 @@ class Tools:
 
     @staticmethod
     def altera_status_bot(canal, novo_status):
+        device = canal.lower()
+        st = 1 if int(novo_status) != 0 else 0
+
+        # 1) PG
         try:
-            with get_conn() as conn:
-                with conn.cursor() as cur:
-                    cur.execute("""
-                        insert into status_bot (canal, status)
-                        values (%s, %s)
-                            on conflict (canal) do update set status = excluded.status
-                    """, (canal.lower(), int(novo_status)))
-                    conn.commit()
-            Tools.log(msg=f"Status '{canal}' -> {novo_status} (PG)", canal=Tools.canal)
+            with get_conn() as conn, conn.cursor() as cur:
+                cur.execute("""
+                            insert into status_bot (canal, status)
+                            values (%s, %s) on conflict (canal) do
+                            update set status = excluded.status
+                            """, (device, st))
         except Exception as e:
-            Tools.log(msg=f"Erro ao alterar status (PG): {e}", canal=Tools.canal)
+            Tools.log(msg=f"Erro ao alterar status (PG): {e}", canal=canal)
+
+        # 2) TXT (fallback, opcional)
+        try:
+            base_dir = r"C:\BW\transfer-2\status_bots"  # ajuste se sua pasta for diferente
+            os.makedirs(base_dir, exist_ok=True)
+            path = os.path.join(base_dir, f"status_{device}.txt")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(str(st))
+        except Exception as e:
+            Tools.log(msg=f"Erro ao escrever status (TXT): {e}", canal=canal)
+
+        return st
 
         #canal = canal.lower()
         #caminho = os.path.join(raiz_status, f"status_{canal}.txt")
