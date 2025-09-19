@@ -64,15 +64,17 @@ class Tools:
     def mailing(canal):
             device = canal.lower()
             import pandas as pd
-            from db import get_conn
+            from db import get_engine
+            engine = get_engine()
 
             q = "select cliente as Cliente, telefone as Telefone from mailing where device=%s"
 
             try:
-                with get_conn() as conn:
-                    df = pd.read_sql(q, params=[device])
+                df = pd.read_sql(q, engine, params=(device,))
                 if df.empty:
                     return df
+
+                df.columns = [c.strip().capitalize() for c in df.columns]
 
                 #Normaliza Telefone
                 df ["Telefone"] = (df["Telefone"].astype(str)
@@ -366,7 +368,7 @@ class Tools:
 
     @staticmethod
     def espera(min_s=1.4, max_s=3.9):
-        _human.espera(min_s, max_s)
+        _human.esperar(min_s, max_s)
 
     @staticmethod
     def click(posicao, clicks: int = 1, button: str = "left"):
@@ -512,7 +514,8 @@ class Tools:
 
         # ESCREVE E ACESSA O DIRETORIO
         Tools.log(msg=f"CONJUNTO CAMPANHA SELECIONADO {dir_img_db}", canal=canal)
-        Tools.escreve(msg=dir_img_db, press_enter="yes")
+        Tools.escreve(msg=dir_img_db)
+        Tools.enter(0.3, 0.9)
         Tools.log_img(log_img=f"SELECAO_CONJUNTO_CAMPANHA_{lead}", canal=canal)
 
         Tools.espera(max(0.6, espera * 0.8), espera * 1.4)

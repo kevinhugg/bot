@@ -87,7 +87,8 @@ while True:
                     is_invalid = True
                     Tools.log(msg="TELA 'TELEFONE INVÁLIDO' LOCALIZADA.", canal=canal)
                 except Exception:
-                    # Se não for inválido, espera ativamente pelo campo de mensagem, que indica que a tela carregou
+                    # Se não for inválido,
+                    # ativamente pelo campo de mensagem, que indica que a tela carregou
                     Tools.log(msg="TELA 'TELEFONE INVÁLIDO' NÃO ENCONTRADA, AGUARDANDO TELA DE CONVERSA...", canal=canal)
                     try:
                         Tools.ciclo_tentativa(
@@ -162,7 +163,8 @@ while True:
                 )
 
                 Tools.log(msg="FINAL DA ITERAÇÃO | PAUSA ENTRE LEADS", canal=canal)
-                Tools.espera(1.2, 2.4)
+                (Tools.espera
+                 (1.2, 2.4))
 
         # FIM DO PROCESSO NORMAL: ENCERRA E ATUALIZA STATUS
         Tools.log(msg="PROCESSO FINALIZADO SEM EXCEÇÕES | ATUALIZANDO STATUS DO BOT PARA 0 (INATIVO)", canal=canal)
@@ -172,14 +174,14 @@ while True:
         break
 
     except Exception as e:
-        # REGISTRA EVENTO DE ERRO E DISCAGEM COM STATUS=3
+        # REGISTRA EVENTO DE ERRO E DISCAGEM COM STATUS=0
         Tools.log(msg=f"ERRO NO PROCESSO | DETALHE: {e}", canal=canal)
         try:
             Tools.registra_discagem(
                 datadiscagem=time.strftime("%Y-%m-%d %H:%M:%S")
-                , telefone=lead, canal=canal, status=3
+                , telefone=lead, canal=canal, status=0
             )
-            Tools.log(msg="DISCAGEM DE ERRO REGISTRADA COM SUCESSO (STATUS=3)", canal=canal)
+            Tools.log(msg="DISCAGEM DE ERRO REGISTRADA COM SUCESSO (STATUS=0)", canal=canal)
         except Exception as ee:
             Tools.log(msg=f"FALHA AO REGISTRAR DISCAGEM DE ERRO | {ee}", canal=canal)
 

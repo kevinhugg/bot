@@ -95,7 +95,7 @@ class Humanizer:
 _default = Humanizer()
 
 def esperar(min_s: float = 1.5, max_s: float = 4.0):
-    _default.espera(min_s, max_s)
+    _default.esperar(min_s, max_s)
 
 def escrever(msg:str):
     _default.escrever(msg)
