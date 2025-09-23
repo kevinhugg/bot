@@ -233,24 +233,26 @@ class Tools:
         #    return None
 
     @staticmethod
-    def altera_status_bot(canal, novo_status):
+    def altera_status_bot(canal, novo_status, reputacao=None):
         device = canal.lower()
         st = 1 if int(novo_status) != 0 else 0
 
-        # 1) PG
         try:
             with get_conn() as conn, conn.cursor() as cur:
                 cur.execute("""
-                            insert into status_bot (canal, status)
-                            values (%s, %s) on conflict (canal) do
-                            update set status = excluded.status
-                            """, (device, st))
+                            insert into status_bot (canal, status, reputacao, atualizado_em)
+                            values (%s, %s, %s, now()) on conflict (canal) do
+                            update
+                                set status = excluded.status,
+                                reputacao = excluded.reputacao,
+                                atualizado_em = now()
+                            """, (device, st, reputacao or 1))
         except Exception as e:
             Tools.log(msg=f"Erro ao alterar status (PG): {e}", canal=canal)
 
-        # 2) TXT (fallback, opcional)
+        # fallback TXT
         try:
-            base_dir = r"C:\BW\transfer-2\status_bots"  # ajuste se sua pasta for diferente
+            base_dir = r"C:\BW\transfer-2\status_bots"
             os.makedirs(base_dir, exist_ok=True)
             path = os.path.join(base_dir, f"status_{device}.txt")
             with open(path, "w", encoding="utf-8") as f:
@@ -875,3 +877,71 @@ class Tools:
         # Retorna 1 para match e 0 para dismatch
         return 1 if similaridade >= limiar else 0
 
+    @staticmethod
+    def atualizar_reputacao(chip):
+        """
+        Define nível de reputação com base em métricas simuladas.
+        """
+        if chip.feedback_negativo > 20:
+            return 5  # Banido
+        elif chip.feedback_negativo > 10 or chip.bounce_rate > 20:
+            return 4  # Perigo de Ban
+        elif chip.taxa_resposta > 0.2 and chip.tempo_atividade < 8:
+            return min(chip.nivel_reputacao + 1, 3)
+        elif chip.taxa_resposta < 0.05:
+            return max(chip.nivel_reputacao - 1, 1)
+        return chip.nivel_reputacao
+
+    @staticmethod
+    def regras_envio(nivel, mensagens_sem_resposta=0):
+        """
+        Define regras de envio e delays por nivel de reputação.
+        """
+        if nivel == 1: # AQUECIMENTO
+            return dict(intervalo=random.randint(280, 320), limite_dia=100)
+        elif nivel == 2: # CONFIÁVEL
+            return dict(intervalo=random.randint(160, 200), limite_dia=200)
+        elif nivel == 3: # SÓLIDO
+            return dict(intervalo=random.randint(120,180), limite_dia=300)
+        elif nivel == 4: # Perigo de ban
+            if mensagens_sem_resposta >= 150:
+                return dict(pausa=7200, alerta=True)
+            return dict(intervalo=random.randint(80, 90), limite_dia=999, alerta=True)
+        elif nivel == 5:
+            return dict(pausa=-1, alerta=True)
+        else:
+            return dict(pausa=None, limite_dia=0)
+
+    @staticmethod
+    def _grab_region(region=STATUS_REGION):
+        x, y, w, h = region
+        img = pyautogui.screenshot(region=(x, y, w, h))
+        return cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+
+    @staticmethod
+    def _match_one(haystack_bgr, needle_path, thr=MATCH_THRESHOLD):
+        needle = cv2.imread(needle_path, cv2.IMREAD_COLOR)
+        if needle is None:
+            raise FileNotFoundError(f"Não achei o template: {needle_path}")
+        res = cv2.matchTemplate(haystack_bgr, needle, cv2.TM_CCOFF_NORMED)
+        _, maxv, _, _ = cv2.minMaxLoc(res)
+        return maxv >= thr, float(maxv)
+
+    @staticmethod
+    def registra_leitura(datadiscagem, telefone, canal, state):
+        """
+        Marca no banco se a mensagem foi lida ou não lida.
+        state: MsgState retornado por detectar_status_por_imagem
+        """
+        from db import get_conn
+
+        lida = 1 if state == MsgState.READ else 0
+        try:
+            with get_conn() as conn, conn.cursor() as cur:
+                cur.execute("""
+                            insert into leitura (datadiscagem, telefone, canal, lida)
+                            values (%s, %s, %s, %s)
+                            """, (datadiscagem, telefone, canal.lower(), lida))
+            Tools.log(msg=f"[leitura] {telefone} <- canal={canal} lida={lida}", canal=canal)
+        except Exception as e:
+            Tools.log(msg=f"[leitura] erro {telefone} | {e}", canal=canal)

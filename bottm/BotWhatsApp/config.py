@@ -1,8 +1,10 @@
 ###############
 ## VARIAVEIS ##
 ###############
-import os
+import os, random
 from dotenv import load_dotenv
+from enum import IntEnum
+from datetime import timedelta
 
 load_dotenv()
 DB_URL = os.getenv("DATABASE_URL")
@@ -23,7 +25,6 @@ dir_imgs_ref        = os.path.join(DIR_TRANSFER, "imgs_referencia")
 dir_logs            = os.path.join(DIR_TRANSFER, "logs")
 dir_logs_trans      = os.path.join(dir_logs, "log_transacional")
 dir_logs_img        = os.path.join(dir_logs, "log_img")
-
 dir_status_bots     = os.path.join(DIR_TRANSFER, "status_bots")
 
 # DIRETORIOS OPERACIONAIS
@@ -67,3 +68,49 @@ img_form_msg    = l
 # COORDENADAS DA TELA
 x_formulario_msg = 615
 y_formulario_msg = 707
+
+
+
+#STATUS DE MENSAGENS (PRINTS)
+
+##CAMINHOS DOS PRINTS
+IMG_SENT_1TICK      = r"C:\BW\prints\status_sent_1tick.png"         # 1 = Apenas enviada
+IMG_DELIV_2TICKS    = r"C:\BW\prints\status_delivered_2ticks.png"   # 2 = Entregue
+IMG_READ_2BLUE      = r"C:\BW\prints\status_read_2blue.png"         # 3 = Lida
+
+#Região que ele vai olhar para comparar
+STATUS_REGION       = (1670, 950, 35, 35)
+
+#SENSIBILIDADE DA COMPARAÇÃO
+MATCH_THRESHOLD     = 0.80
+
+class MsgState(IntEnum):
+    NOT_DELIVERED  = 0  # Sem ticks visíveis
+    SENT           = 1  # 1 tick
+    DELIVERED      = 2  # 2 ticks
+    READ           = 3  # 2 ticks azuis
+
+class Feedback(IntEnum):
+    NONE           = 0
+    NEGATIVE       = 1
+    POSITIVE       = 2
+    NOT_SEEN       = 3
+
+#POLÍTICAS DE RECHECAGEM/BAN-SAFE
+UNREAD_NEGATIVE_AFTER       = timedelta(days=14)
+MAX_UNDELIVERED_ATTEMPTS    = 2
+COOLDOWN_NEGATIVE_MIN_DAYS  = 30
+COOLDOWN_NEGATIVE_MAX_DAYS  = 60
+
+
+#randomiza os dias de FREEZE
+def get_random_freeze_days():
+    """Retorna um cooldown aleatório entre os limites estabelecidos"""
+    return random.randint(COOLDOWN_NEGATIVE_MIN_DAYS, COOLDOWN_NEGATIVE_MAX_DAYS)
+
+
+COLOCAR DEPOIS
+
+from config import get_random_cooldown_days
+
+cooldown_days = get_random_cooldown_days()

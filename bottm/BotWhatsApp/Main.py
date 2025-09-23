@@ -1,6 +1,33 @@
 # IMPORTAÇÕES DOS MÓDULOS PERSONALIZADOS
 from MainClass import *
 import sys
+from datetime import datetime, timezone
+from config import *
+
+
+
+##### FUNÇÕES DE RECHECAGEM
+def classificar_feedback(state, sent_at):
+    """
+    Classifica o feedback de um envio com base no estado atual e no tempo.
+    """
+
+    if state == MsgState.READ:
+        return Feedback.POSITIVE, "Mensagem lida."
+
+    return Feedback.NOT_SEEN, "Mensagem ainda não lida."
+
+def precisa_reenviar(state, attempts):
+    """
+    Decide se precisa reenviar:
+
+    - Só reenvia se não entregue
+    - Até o limite definido em MAX_UNDELIVERED_ATTEMPTS
+    """
+
+    return state == MsgState.NOT_DELIVERED and attempts < MAX_UNDELIVERED_ATTEMPTS
+
+
 
 # DEFINIÇÃO DO CANAL E VARIÁVEIS DE CONTROLE
 canal = "teste" #colocar o terra depois
@@ -48,6 +75,111 @@ while True:
         Tools.log(msg="LENDO MAILING E APLICANDO FILTROS (DISCAGENS JÁ REALIZADAS)", canal=canal)
         df_mailing = Tools.mailing(canal=canal)
         Tools.log(msg=f"MAILING CARREGADO | TOTAL REGISTROS: {len(df_mailing)}", canal=canal)
+
+        # --- próximo ao topo, imports se necessário ---
+        from db import get_conn
+
+
+        # -------------------------------------------
+
+        # Dentro do while (logo antes de Tools.mailing)
+        class Chip:
+            def __init__(self, canal):
+                self.canal = canal
+                # métricas iniciais; serão recalculadas a cada run
+                self.feedback_negativo = 0  # respostas negativas / reclamações
+                self.bounce_rate = 0.0  # % telefones inválidos (bounce)
+                self.taxa_resposta = 0.0  # respostas / tentativas
+                self.tempo_atividade = 0  # dias/meses desde início
+                self.nivel_reputacao = 1  # valor inicial (1..5)
+                self.sem_resposta = 0  # mensagens sem resposta (consecutivas)
+
+            def load_from_db(self):
+                """Popula métricas com queries reais (exemplos abaixo)."""
+                try:
+                    with get_conn() as conn, conn.cursor() as cur:
+                        # total tentativas (ultimas N dias)
+                        cur.execute("""
+                                    select count(*)
+                                    from discagem
+                                    where canal = %s
+                                      and datadiscagem >= now() - interval '7 days'
+                                    """, (self.canal,))
+                        tentativas = cur.fetchone()[0] or 0
+
+                        # respostas (ex: status = 1 => sucesso / resposta)
+                        cur.execute("""
+                                    select count(*)
+                                    from discagem
+                                    where canal = %s
+                                      and status = 1
+                                      and datadiscagem >= now() - interval '7 days'
+                                    """, (self.canal,))
+                        respostas = cur.fetchone()[0] or 0
+
+                        # invalido (status=3 por exemplo)
+                        cur.execute("""
+                                    select count(*)
+                                    from discagem
+                                    where canal = %s
+                                      and status = 3
+                                      and datadiscagem >= now() - interval '7 days'
+                                    """, (self.canal,))
+                        invalidos = cur.fetchone()[0] or 0
+
+                        # feedback negativo (pode ser outro evento/coluna; se não existir, usar invalidos como proxy)
+                        cur.execute("""
+                                    select sum(coalesce(feedback_negativo, 0))
+                                    from canal_feedback
+                                    where canal = %s
+                                      and created_at >= now() - interval '7 days'
+                                    """, (self.canal,))
+                        fb_neg = cur.fetchone()[0] or 0
+
+                    # calcula métricas
+                    self.taxa_resposta = (respostas / tentativas) if tentativas else 0.0
+                    self.bounce_rate = (invalidos / tentativas * 100.0) if tentativas else 0.0
+                    self.feedback_negativo = fb_neg
+                    self.sem_resposta = max(0, tentativas - respostas)  # simples proxy
+                    # tempo_atividade e nivel_reputacao você pode buscar em status_bot.reputacao
+                    try:
+                        with get_conn() as conn, conn.cursor() as cur:
+                            cur.execute("select reputacao from status_bot where canal=%s", (self.canal,))
+                            r = cur.fetchone()
+                            if r:
+                                self.nivel_reputacao = int(r[0])
+                    except Exception:
+                        pass
+
+                except Exception as e:
+                    Tools.log(msg=f"[Chip.load_from_db] erro: {e}", canal=self.canal)
+
+
+        # --- dentro do loop ---
+        chip = Chip(canal)
+        chip.load_from_db()
+
+        # recalcula reputacao e regras
+        novo_nivel = Tools.atualizar_reputacao(chip)
+        chip.nivel_reputacao = novo_nivel
+
+        regras = Tools.regras_envio(novo_nivel, chip.sem_resposta)
+
+        # atualiza no supabase
+        Tools.altera_status_bot(canal=canal, novo_status=1, reputacao=novo_nivel)
+
+        # aplica pausa/intervalo (exatamente como no patch)
+        if "pausa" in regras:
+            if regras["pausa"] == -1:
+                Tools.log(msg="🚫 Bot banido, parando execução", canal=canal)
+                sys.exit()
+            else:
+                Tools.log(msg=f"⏸️ Pausa automática de {regras['pausa'] / 60:.0f} minutos", canal=canal)
+                time.sleep(regras["pausa"])
+        else:
+            delay = regras["intervalo"]
+            Tools.log(msg=f"⌛ Delay entre mensagens: {delay}s (nível {novo_nivel})", canal=canal)
+            time.sleep(delay)
 
         # ###########################
         # EXECUÇÃO POR SPINS
