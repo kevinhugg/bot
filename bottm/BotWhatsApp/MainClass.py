@@ -912,6 +912,7 @@ class Tools:
         else:
             return dict(pausa=None, limite_dia=0)
 
+
     @staticmethod
     def _grab_region(region=STATUS_REGION):
         x, y, w, h = region
