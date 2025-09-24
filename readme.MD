@@ -1,11 +1,11 @@
-# 🤖 WhatsApp Bot – Fluxo Humanizado
+# WhatsApp Bot – Fluxo Humanizado
 
 Automação de mensagens no WhatsApp Desktop com **humanização** (pausas randômicas, digitação natural, movimentos suaves do mouse).  
 Este README explica **o que mudou**, **como configurar** e **como rodar**.
 
 ---
 
-## 📦 Sumário
+## Sumário
 - [Visão geral](#visão-geral)
 - [Estrutura do projeto](#estrutura-do-projeto)
 - [Instalação](#instalação)
