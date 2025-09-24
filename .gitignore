@@ -2,6 +2,8 @@
 *.png
 *.exe
 *.dll
+*.xml
+*.iml
 programas/
 git rm --cached *.msi
 supabase_stats.py
