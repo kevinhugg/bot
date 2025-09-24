@@ -64,8 +64,8 @@ class Tools:
     def mailing(canal):
             device = canal.lower()
             import pandas as pd
-            from db import get_engine
-            engine = get_engine()
+            from db import get_conn
+            engine = get_conn()
 
             q = "select cliente as Cliente, telefone as Telefone from mailing where device=%s"
 
@@ -154,6 +154,7 @@ class Tools:
     def registra_discagem(datadiscagem, telefone, canal, status):
         import re
         from db import get_conn
+        from bot_leads import lead_on_send  # ← import local evita ciclo
 
         tel = re.sub(r"\D+", "", str(telefone or ""))
         if tel and not tel.startswith("55"):
@@ -165,8 +166,16 @@ class Tools:
                             values (%s, %s, %s, %s)
                             """, (datadiscagem, tel, canal.lower(), int(status)))
             Tools.log(msg=f"[discagem] {tel} <- canal={canal} status={status}", canal=canal)
+
+            # ✅ integração leads
+            try:
+                lead_on_send(canal, tel)
+            except Exception as le:
+                Tools.log(msg=f"[leads] erro lead_on_send: {le}", canal=canal)
+
         except Exception as e:
             Tools.log(msg=f"[discagem] erro {tel} | {e}", canal=canal)
+
 
         #try: ANTIGO ##############
             # garante a pasta dump_discagem
@@ -233,34 +242,20 @@ class Tools:
         #    return None
 
     @staticmethod
-    def altera_status_bot(canal, novo_status, reputacao=None):
-        device = canal.lower()
-        st = 1 if int(novo_status) != 0 else 0
-
+    def altera_status_bot(novo_status, canal, reputacao=None):
         try:
             with get_conn() as conn, conn.cursor() as cur:
                 cur.execute("""
                             insert into status_bot (canal, status, reputacao, atualizado_em)
-                            values (%s, %s, %s, now()) on conflict (canal) do
+                            values (%s, %s, coalesce(%s, 1), now()) on conflict (canal) do
                             update
                                 set status = excluded.status,
                                 reputacao = excluded.reputacao,
-                                atualizado_em = now()
-                            """, (device, st, reputacao or 1))
+                                atualizado_em = excluded.atualizado_em
+                            """, (canal, novo_status, reputacao))
+            Tools.log(msg=f"[status_bot] canal={canal} atualizado para {novo_status} (rep={reputacao})", canal=canal)
         except Exception as e:
             Tools.log(msg=f"Erro ao alterar status (PG): {e}", canal=canal)
-
-        # fallback TXT
-        try:
-            base_dir = r"C:\BW\transfer-2\status_bots"
-            os.makedirs(base_dir, exist_ok=True)
-            path = os.path.join(base_dir, f"status_{device}.txt")
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(str(st))
-        except Exception as e:
-            Tools.log(msg=f"Erro ao escrever status (TXT): {e}", canal=canal)
-
-        return st
 
         #canal = canal.lower()
         #caminho = os.path.join(raiz_status, f"status_{canal}.txt")
@@ -895,23 +890,45 @@ class Tools:
     @staticmethod
     def regras_envio(nivel, mensagens_sem_resposta=0):
         """
-        Define regras de envio e delays por nivel de reputação.
+        Define regras de envio e delays por nivel de reputação,
+        simulando horários humanos (almoço e fim de expediente).
         """
-        if nivel == 1: # AQUECIMENTO
-            return dict(intervalo=random.randint(280, 320), limite_dia=100)
-        elif nivel == 2: # CONFIÁVEL
-            return dict(intervalo=random.randint(160, 200), limite_dia=200)
-        elif nivel == 3: # SÓLIDO
-            return dict(intervalo=random.randint(120,180), limite_dia=300)
-        elif nivel == 4: # Perigo de ban
-            if mensagens_sem_resposta >= 150:
-                return dict(pausa=7200, alerta=True)
-            return dict(intervalo=random.randint(80, 90), limite_dia=999, alerta=True)
-        elif nivel == 5:
-            return dict(pausa=-1, alerta=True)
-        else:
-            return dict(pausa=None, limite_dia=0)
+        from datetime import datetime, time, timedelta
 
+        agora = datetime.now().time()
+
+        # === Pausa de almoço ===
+        almoco_ini = time(12, 0)
+        almoco_fim = time(13, 30)
+        if almoco_ini <= agora <= almoco_fim:
+            return dict(pausa=random.randint(300, 900),  # pausa de 5–15 min (ajusta conforme quiser)
+                        alerta=False,
+                        motivo="Almoço")
+
+        # === Fim de expediente ===
+        fim_base = time(20, 0)
+        fim_real = (datetime.combine(datetime.today(), fim_base)
+                    + timedelta(minutes=random.randint(-10, 10))).time()
+        if agora >= fim_real:
+            return dict(pausa=99999,  # pausa “infinita” até o próximo ciclo/execução
+                        alerta=False,
+                        motivo="Fim do expediente")
+
+        # === Regras normais de intervalo ===
+        if nivel == 1:  # AQUECIMENTO
+            return dict(intervalo=random.randint(280, 320), limite_dia=100)
+        elif nivel == 2:  # CONFIÁVEL
+            return dict(intervalo=random.randint(160, 200), limite_dia=200)
+        elif nivel == 3:  # SÓLIDO
+            return dict(intervalo=random.randint(120, 180), limite_dia=300)
+        elif nivel == 4:  # PERIGO DE BAN
+            if mensagens_sem_resposta >= 150:
+                return dict(pausa=7200, alerta=True, motivo="Muitos não respondidos")
+            return dict(intervalo=random.randint(80, 90), limite_dia=999, alerta=True)
+        elif nivel == 5:  # BANIDO
+            return dict(pausa=-1, alerta=True, motivo="Banido")
+
+        return dict(pausa=None, limite_dia=0)
 
     @staticmethod
     def _grab_region(region=STATUS_REGION):
@@ -929,20 +946,128 @@ class Tools:
         return maxv >= thr, float(maxv)
 
     @staticmethod
-    def registra_leitura(datadiscagem, telefone, canal, state):
+    def detectar_status_por_imagem(region=STATUS_REGION):
         """
-        Marca no banco se a mensagem foi lida ou não lida.
-        state: MsgState retornado por detectar_status_por_imagem
+        Captura a região especificada e identifica o status:
+        - 2 ticks azuis  = READ
+        - 2 ticks cinzas = DELIVERED
+        - 1 tick cinza   = SENT
+        - nada encontrado = NOT_DELIVERED
+        RETORNA (MsgState, score)
         """
-        from db import get_conn
+        img = Tools._grab_region(region)
 
-        lida = 1 if state == MsgState.READ else 0
+        ok, score = Tools._match_one(img, IMG_READ_2BLUE)
+        if ok:
+            state = MsgState.READ
+        else:
+            ok, score = Tools._match_one(img, IMG_DELIV_2TICKS)
+            if ok:
+                state = MsgState.DELIVERED
+            else:
+                ok, score = Tools._match_one(img, IMG_SENT_1TICK)
+                if ok:
+                    state = MsgState.SENT
+                else:
+                    state = MsgState.NOT_DELIVERED
+                    score = 0.0
+
+        # ✅ integração leads
+        _state_map = {
+            MsgState.READ: "READ",
+            MsgState.DELIVERED: "DELIVERED",
+            MsgState.SENT: "SENT",
+            MsgState.NOT_DELIVERED: "NOT_DELIVERED"
+        }
+        detected_state_str = _state_map.get(state, "NOT_FOUND")
         try:
-            with get_conn() as conn, conn.cursor() as cur:
-                cur.execute("""
-                            insert into leitura (datadiscagem, telefone, canal, lida)
-                            values (%s, %s, %s, %s)
-                            """, (datadiscagem, telefone, canal.lower(), lida))
-            Tools.log(msg=f"[leitura] {telefone} <- canal={canal} lida={lida}", canal=canal)
-        except Exception as e:
-            Tools.log(msg=f"[leitura] erro {telefone} | {e}", canal=canal)
+            # telefone/canal devem ser passados no contexto de quem chamou
+            # ajuste conforme sua lógica (ex.: Tools.telefone_atual, Tools.canal)
+            lead_on_check(getattr(Tools, "telefone_atual", None),
+                          detected_state_str,
+                          score=score)
+        except Exception as le:
+            Tools.log(msg=f"[leads] erro lead_on_check: {le}",
+                      canal=getattr(Tools, "canal", None))
+
+        return state, score
+
+    def loop_envio(canal: str, nivel_inicial: int = 1):
+        """
+        Loop principal de envios de mensagens humanizadas.
+        Respeita almoço, fim de expediente e atualiza status_bot.
+        """
+        Tools.canal = canal
+        nivel_atual = nivel_inicial
+        mensagens_sem_resposta = 0
+
+        Tools.log(f"🚀 Iniciando loop de envio para canal={canal}", canal)
+
+        while True:
+            # === Carrega mailing do banco ===
+            df = Tools.mailing(canal)
+            if df.empty:
+                Tools.log("📭 Mailing vazio — aguardando 5 minutos…", canal)
+                time.sleep(300)
+                continue
+
+            # === Itera sobre os contatos ===
+            for _, row in df.iterrows():
+                cliente = row["Cliente"]
+                telefone = row["Telefone"]
+
+                # Regras de envio (horários + reputação)
+                regras = Tools.regras_envio(nivel_atual, mensagens_sem_resposta)
+
+                # Caso especial: pausa (almoço ou fim do expediente)
+                if "pausa" in regras and regras["pausa"]:
+                    motivo = regras.get("motivo", "Pausa")
+                    Tools.log(f"⏸️ Bot em pausa: {motivo} ({regras['pausa']}s)", canal)
+
+                    try:
+                        Tools.altera_status_bot(canal, novo_status=0, reputacao=nivel_atual)
+                    except Exception as e:
+                        Tools.log(f"Erro ao registrar pausa no Supabase: {e}", canal)
+
+                    if regras["pausa"] > 0:
+                        time.sleep(regras["pausa"])
+                    else:
+                        Tools.log("⛔ Loop encerrado (banido ou fim permanente).", canal)
+                        return
+                    continue
+
+                # Caso normal → intervalo aleatório
+                intervalo = regras.get("intervalo", random.randint(60, 120))
+                limite_dia = regras.get("limite_dia", 999)
+
+                Tools.log(f"⌛ Aguardando {intervalo}s antes de próximo envio…", canal)
+                time.sleep(intervalo)
+
+                # === Seleciona mensagem ===
+                msg = Tools.tm_mensagem()
+                if not msg:
+                    Tools.log("⚠️ Nenhuma mensagem disponível — pulando.", canal)
+                    continue
+
+                try:
+                    # Abre conversa no WhatsApp
+                    Tools.abre_whatsapp_desktop(telefone, sleep=5)
+
+                    # Escreve e envia mensagem
+                    Tools.monta_msg(cliente=cliente, msg_tm=msg)
+
+                    # Registra no banco
+                    Tools.registra_discagem(datetime.datetime.now(), telefone, canal, status=1)
+
+                    Tools.log(f"✅ Mensagem enviada para {telefone}", canal)
+
+                except Exception as e:
+                    Tools.log(f"❌ Erro ao enviar para {telefone} | {e}", canal)
+                    Tools.registra_discagem(datetime.datetime.now(), telefone, canal, status=0)
+
+            # Fim do mailing → pausa curta antes de recomeçar
+            Tools.log("📥 Fim do mailing, aguardando 15 min para reprocessar.", canal)
+            time.sleep(900)
+
+    if __name__ == "__main__":
+        loop_envio(canal="teste", nivel_inicial=1)        #AQUI ESCOLHE O BOT QUE VAI RODAR

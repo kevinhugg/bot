@@ -74,9 +74,9 @@ y_formulario_msg = 707
 #STATUS DE MENSAGENS (PRINTS)
 
 ##CAMINHOS DOS PRINTS
-IMG_SENT_1TICK      = r"C:\BW\prints\status_sent_1tick.png"         # 1 = Apenas enviada
-IMG_DELIV_2TICKS    = r"C:\BW\prints\status_delivered_2ticks.png"   # 2 = Entregue
-IMG_READ_2BLUE      = r"C:\BW\prints\status_read_2blue.png"         # 3 = Lida
+IMG_SENT_1TICK      = r"C:\BW\prints\one_check.png"         # 1 = Apenas enviada
+IMG_DELIV_2TICKS    = r"C:\BW\prints\two_checks.png"   # 2 = Entregue
+IMG_READ_2BLUE      = r"C:\BW\prints\blue_checks.png"         # 3 = Lida
 
 #Região que ele vai olhar para comparar
 STATUS_REGION       = (1670, 950, 35, 35)
@@ -107,10 +107,3 @@ COOLDOWN_NEGATIVE_MAX_DAYS  = 60
 def get_random_freeze_days():
     """Retorna um cooldown aleatório entre os limites estabelecidos"""
     return random.randint(COOLDOWN_NEGATIVE_MIN_DAYS, COOLDOWN_NEGATIVE_MAX_DAYS)
-
-
-COLOCAR DEPOIS
-
-from config import get_random_cooldown_days
-
-cooldown_days = get_random_cooldown_days()
