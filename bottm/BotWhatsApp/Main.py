@@ -70,9 +70,9 @@ while True:
         sys.exit()
 
     try:
-        # ###########################
+        # ##########################
         # CARGA DE MAILING
-        # ###########################
+        # ##########################
         Tools.log(msg="LENDO MAILING E APLICANDO FILTROS (DISCAGENS JÁ REALIZADAS)", canal=canal)
         df_mailing = Tools.mailing(canal=canal)
         Tools.log(msg=f"MAILING CARREGADO | TOTAL REGISTROS: {len(df_mailing)}", canal=canal)
