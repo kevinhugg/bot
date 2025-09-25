@@ -5,7 +5,7 @@
 *.iml
 programas/
 git rm --cached *.msi
-supabase_stats.py
-etl_txt_para_pg.py
-db.py
+src/supabase_stats.py
+src/etl_txt_para_pg.py
+src/db.py
 quick_pg_test.py

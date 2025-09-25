@@ -207,7 +207,7 @@ class Tools:
 
         # 2) fallback TXT
         try:
-            base_dir = r"C:\BW\transfer-2\status_bots"  # ajuste se sua pasta for diferente
+            base_dir = r"/status_bots"  # ajuste se sua pasta for diferente
             os.makedirs(base_dir, exist_ok=True)
             path = os.path.join(base_dir, f"status_{device}.txt")
             if os.path.isfile(path):

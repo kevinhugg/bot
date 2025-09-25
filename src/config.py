@@ -14,7 +14,7 @@ DB_URL = os.getenv("DATABASE_URL")
 #DIR_TRANSFER  = os.path.join(DIR_RAIZ, "transfer")
 #DIR_RAIZ      = r"\\100.96.1.3"
 #DIR_TRANSFER  = os.path.join(DIR_RAIZ, "transfer")
-DIR_RAIZ = r"C:\BW\transfer-2"
+DIR_RAIZ = r"/"
 DIR_TRANSFER = DIR_RAIZ
 
 
