@@ -60,9 +60,9 @@ Tools.altera_status_bot(novo_status=1, canal=canal)
 Tools.log(msg="INICIANDO LOOP PRINCIPAL", canal=canal)
 while True:
 
-    # ###########################
+    # ##########################
     # VALIDAÇÕES DE EXECUÇÃO
-    # ###########################
+    # ##########################
     Tools.log(msg="VALIDANDO STATUS DO BOT", canal=canal)
     status_robo = Tools.valida_status_bot(canal=canal)
     if status_robo != 1:
