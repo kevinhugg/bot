@@ -22,6 +22,9 @@ import cv2
 import pyautogui
 import mouse
 import os, re, csv, datetime, sys
+import pytesseract
+from PIL import Image
+pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
@@ -32,6 +35,9 @@ from humanizer import Humanizer, HumanizeConfig
 _hcfg = HumanizeConfig(enabled=True)
 _human = Humanizer(_hcfg)
 #################
+
+raiz_dir = dirs_ref["dir_img_ref"]
+img_form_msg = os.path.join(raiz_dir, imagens_ref["form_msg"])
 
 # SUPRIME AVISOS
 warnings.filterwarnings("ignore", category=SyntaxWarning)
@@ -154,21 +160,29 @@ class Tools:
 
     # REGISTRA DISCAGEM
     @staticmethod
-    def registra_discagem(datadiscagem, telefone, canal, status):
+    def registra_discagem(datadiscagem, telefone, canal, status, resposta=None):
         import re
         from db import get_conn
-        from bot_leads import lead_on_send  # ← import local evita ciclo
+        from bot_leads import lead_on_send, get_current_status  # ← adicionei get_current_status
 
         tel = re.sub(r"\D+", "", str(telefone or ""))
         if tel and not tel.startswith("55"):
-            tel = "55"+tel
+            tel = "55" + tel
         try:
             with get_conn() as conn, conn.cursor() as cur:
+                # 🔎 pega status atual do lead (se já existir)
+                try:
+                    status_lead_atual = get_current_status(conn, tel)
+                except Exception:
+                    status_lead_atual = None
+
+                # 🔗 insere discagem + status_lead
                 cur.execute("""
-                            insert into discados (datadiscagem, telefone, canal, status)
-                            values (%s, %s, %s, %s)
-                            """, (datadiscagem, tel, canal.lower(), int(status)))
-            Tools.log(msg=f"[discagem] {tel} <- canal={canal} status={status}", canal=canal)
+                    insert into discados (datadiscagem, telefone, canal, status, resposta, status_lead)
+                    values (%s, %s, %s, %s, %s, %s)
+                """, (datadiscagem, tel, canal.lower(), int(status), resposta, status_lead_atual))
+
+            Tools.log(msg=f"[discagem] {tel} <- canal={canal} status={status} (status_lead={status_lead_atual})", canal=canal)
 
             # ✅ integração leads
             try:
@@ -178,6 +192,7 @@ class Tools:
 
         except Exception as e:
             Tools.log(msg=f"[discagem] erro {tel} | {e}", canal=canal)
+
 
 
         #try: ANTIGO ##############
@@ -290,11 +305,16 @@ class Tools:
         #Garante que o diretório log existe
         os.makedirs(os.path.dirname(caminho_log), exist_ok=True)
 
+        MAX_MB = 5
+        if os.path.exists(caminho_log) and os.path.getsize(caminho_log) > MAX_MB * 1024 * 1024:
+            backup_path = caminho_log + "." + time.strftime("%Y%m%d%H%M%S") + ".old"
+            os.rename(caminho_log, backup_path)
+
         with open(caminho_log, "a", encoding="utf-8") as f:
             f.write(f"{timestamp};{msg}\n")
 
     @staticmethod
-    def abre_whatsapp_desktop(numero, sleep=None):
+    def abre_whatsapp_desktop(numero, sleep=5):
         """
         Abre uma conversa no WhatsApp Web com o número informado.
         :param numero: Número no formato DDI + DDD + número (ex: 5511987654321)
@@ -319,12 +339,13 @@ class Tools:
             Tools.pressionar_tecla(tecla1="ctrl", tecla2="l", press_enter="yes")
 
         # ENCERRA TODOS OS PROCESSOS DE WHATSAPP E EDGE ABERTOS
-        for proc in psutil.process_iter(["name", "exe"]):
             try:
-                if proc.info["name"] in procs_ambiente_whatsapp:
-                    proc.kill()
+                url = f"https://wa.me/{numero}"
+                webbrowser.open(url)
+                Tools.log(msg=f"Abrindo conversa com {numero} via wa.me", canal=Tools.canal)
+                time.sleep(sleep)  # espera carregar a tela
             except Exception as e:
-                print(f"Erro ao encerrar processo: {e}")
+                Tools.log(msg=f"Erro ao abrir conversa com {numero}: {e}", canal=Tools.canal)
 
         # Abre o link que direciona para o WhatsApp Desktop
         url = f"https://wa.me/{numero}"
@@ -773,7 +794,6 @@ class Tools:
         img.save(f"{caminho_destino}.png")
 
     @staticmethod
-    @staticmethod
     def valida_caixa_texto(cliente, msg_tm, lead):
         try:
             localizacao = pyautogui.locateOnScreen(img_form_msg, confidence=0.80)
@@ -919,7 +939,7 @@ class Tools:
 
         # === Regras normais de intervalo ===
         if nivel == 1:  # AQUECIMENTO
-            return dict(intervalo=random.randint(20, 35), limite_dia=100) #era 280 a 320
+            return dict(intervalo=random.randint(10, 15), limite_dia=100) #era 280 a 320
         elif nivel == 2:  # CONFIÁVEL
             return dict(intervalo=random.randint(160, 200), limite_dia=200)
         elif nivel == 3:  # SÓLIDO
@@ -1071,6 +1091,82 @@ class Tools:
             # Fim do mailing → pausa curta antes de recomeçar
             Tools.log("📥 Fim do mailing, aguardando 15 min para reprocessar.", canal)
             time.sleep(900)
+
+    @staticmethod
+    def captura_resposta(region=(410, 400, 800, 600)):
+        """
+        Captura a tela da área da conversa e tenta extrair texto via OCR.
+        O print é processado em memória para evitar cache no disco.
+        """
+        try:
+            screenshot = pyautogui.screenshot(region=region)
+            texto = pytesseract.image_to_string(screenshot, lang="por")
+            texto = (texto or "").strip()
+            Tools.log(msg=f"[OCR] Resposta capturada: {texto}", canal=Tools.canal)
+
+            # libera memória
+            del screenshot
+            import gc
+            gc.collect()
+
+            return texto
+        except Exception as e:
+            Tools.log(msg=f"[OCR] erro ao capturar resposta: {e}", canal=Tools.canal)
+            return None
+
+    @staticmethod
+    def classifica_resposta(texto: str) -> str:
+        """
+        Classifica a resposta como POSITIVA, NEGATIVA ou NEUTRA.
+        """
+        if not texto:
+            return "NEUTRA"
+        t = texto.lower()
+        positivos = ["sim", "quero", "interessado", "ok", "manda", "certo", "top"]
+        negativos = ["não", "nao", "pare", "sai", "nunca", "stop", "remove"]
+        if any(p in t for p in positivos):
+            return "POSITIVA"
+        if any(n in t for n in negativos):
+            return "NEGATIVA"
+        return "NEUTRA"
+
+    @staticmethod
+    def registra_resposta(telefone, canal, resposta):
+        """
+        Atualiza no banco a resposta capturada + classificação.
+        """
+        classificacao = Tools.classifica_resposta(resposta)
+        engajado = (classificacao == "POSITIVA")
+
+        try:
+            with get_conn() as conn, conn.cursor() as cur:
+                cur.execute("""
+                            update discados
+                            set resposta=%s,
+                                classificacao=%s,
+                                engajado=%s
+                            where telefone = %s
+                              and canal = %s order by datadiscagem desc
+                       limit 1
+                            """, (resposta, classificacao, engajado, telefone, canal))
+            Tools.log(msg=f"[resposta] {telefone} -> {classificacao}", canal=canal)
+        except Exception as e:
+            Tools.log(msg=f"[resposta] erro ao registrar no banco: {e}", canal=canal)
+
+            @staticmethod
+            def limpar_logs_imagem(dias=7):
+                """
+                    Remove prints antigos da pasta raiz_log_imgs com mais de X dias.
+                """
+                agora = time.time()
+                limite = dias * 86400
+                for f in os.listdir(raiz_log_imgs):
+                    path = os.path.join(raiz_log_imgs, f)
+                    try:
+                        if os.path.isfile(path) and agora - os.path.getmtime(path) > limite:
+                            os.remove(path)
+                    except Exception:
+                        pass
 
     if __name__ == "__main__":
         loop_envio(canal="teste", nivel_inicial=1)        #AQUI ESCOLHE O BOT QUE VAI RODAR

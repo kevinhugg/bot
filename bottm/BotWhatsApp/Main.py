@@ -60,9 +60,9 @@ Tools.altera_status_bot(novo_status=1, canal=canal)
 Tools.log(msg="INICIANDO LOOP PRINCIPAL", canal=canal)
 while True:
 
-    # ##########################
+    # ###########################
     # VALIDAÇÕES DE EXECUÇÃO
-    # ##########################
+    # ###########################
     Tools.log(msg="VALIDANDO STATUS DO BOT", canal=canal)
     status_robo = Tools.valida_status_bot(canal=canal)
     if status_robo != 1:
@@ -129,13 +129,7 @@ while True:
                         invalidos = cur.fetchone()[0] or 0
 
                         # feedback negativo (pode ser outro evento/coluna; se não existir, usar invalidos como proxy)
-                        cur.execute("""
-                                    select sum(coalesce(feedback_negativo, 0))
-                                    from canal_feedback
-                                    where canal = %s
-                                      and created_at >= now() - interval '7 days'
-                                    """, (self.canal,))
-                        fb_neg = cur.fetchone()[0] or 0
+                        fb_neg = invalidos
 
                     # calcula métricas
                     self.taxa_resposta = (respostas / tentativas) if tentativas else 0.0
@@ -299,6 +293,18 @@ while True:
                 (Tools.espera
                  (1.2, 2.4))
 
+
+        # 📌 CAPTURA DE RESPOSTAS DEPOIS DO MAILING INTEIRO
+        Tools.log(msg="📥 Iniciando captura de respostas após o mailing", canal=canal)
+
+        # você pode ajustar a região (x, y, largura, altura) conforme sua tela
+        resposta = Tools.captura_resposta(region=(300, 200, 800, 600))
+
+        if resposta:
+            Tools.registra_resposta(telefone=None, canal=canal, resposta=resposta)
+            Tools.log(msg=f"📌 Resposta registrada: {resposta}", canal=canal)
+        else:
+            Tools.log(msg="⚠️ Nenhuma resposta detectada após o mailing", canal=canal)
 
         finalizar_campanha(canal)
 

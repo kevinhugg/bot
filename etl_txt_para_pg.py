@@ -1,6 +1,8 @@
 # etl_txt_para_pg.py
 import os, csv, re, sys, argparse
-import psycopg
+import p
+
+sycopg
 from datetime import datetime
 from psycopg.rows import tuple_row
 
